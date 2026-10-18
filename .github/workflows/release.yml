@@ -41,6 +41,19 @@ jobs:
 
       - run: npm ci
 
+      # Release notes come from this version's section of CHANGELOG.md.
+      - name: Read release notes
+        id: notes
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          body=$(awk -v v="## $version" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+          {
+            echo "body<<EOF_NOTES"
+            echo "${body:-Bug fixes and improvements.}" | sed '/./,$!d'
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +62,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: Eardloom v__VERSION__
-          releaseBody: See the changelog for what's new in this version.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
