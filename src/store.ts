@@ -28,6 +28,9 @@ interface State {
   forward: Route[];
   paletteOpen: boolean;
   toast: string | null;
+  /** Distraction-free writing: hides everything but the page. */
+  focusMode: boolean;
+  setFocusMode: (on: boolean) => void;
 
   openWorld: (world: WorldInfo) => Promise<void>;
   closeWorld: () => Promise<void>;
@@ -64,6 +67,11 @@ export const useStore = create<State>((set, get) => ({
   forward: [],
   paletteOpen: false,
   toast: null,
+  focusMode: false,
+  setFocusMode: (focusMode) => {
+    set({ focusMode });
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => getCurrentWindow().setFullscreen(focusMode)).catch(() => {});
+  },
 
   openWorld: async (world) => {
     const [types, entries, projects, calendar] = await Promise.all([
@@ -123,6 +131,7 @@ export const useStore = create<State>((set, get) => ({
 
   go: (route) => {
     const { route: current, back } = get();
+    if (route.view !== "project" && get().focusMode) get().setFocusMode(false);
     if (sameRoute(current, route)) return;
     set({ route, back: [...back, current].slice(-100), forward: [] });
   },

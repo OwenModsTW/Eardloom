@@ -8,15 +8,25 @@ import {
   type JSONContent,
   type NodeViewProps,
 } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
+import TextAlign from "@tiptap/extension-text-align";
+import Highlight from "@tiptap/extension-highlight";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import Typography from "@tiptap/extension-typography";
 import Mention from "@tiptap/extension-mention";
-import { CharacterCount, Placeholder } from "@tiptap/extensions";
+import { CharacterCount, Focus, Placeholder } from "@tiptap/extensions";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { useStore } from "../store";
 import { EntryGlyph } from "./EntryIcon";
 import { TypeIcon } from "../lib/icons";
 import { createEntry } from "../lib/actions";
 import { FormatBar } from "./FormatBar";
+import { FindBar } from "./FindBar";
+import { Search } from "../lib/editor/search";
+import { getManuscriptLook } from "../lib/prefs";
 import type { EntrySummary } from "../lib/types";
 
 /** Lets the surrounding view decide what clicking a mention does (navigate, open in side panel...). */
@@ -193,6 +203,13 @@ const LoreMention = Mention.extend({
   },
 });
 
+export interface EditorStats {
+  words: number;
+  characters: number;
+  /** Words in the current selection, or 0. */
+  selectedWords: number;
+}
+
 interface Props {
   content: JSONContent | null;
   onChange: (doc: JSONContent, words: number, empty: boolean) => void;
@@ -201,31 +218,92 @@ interface Props {
   autofocus?: boolean;
   /** Small inline editor for paragraph fields. */
   compact?: boolean;
+  /** Long-form writing: typewriter scrolling and paragraph focus become available. */
+  manuscript?: boolean;
+  onStats?: (stats: EditorStats) => void;
 }
 
+const countWords = (text: string) => (text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ?? []).length;
+
 /** Rich text with @mentions. Remount with a `key` to load a different document. */
-export function RichEditor({ content, onChange, placeholder, className, autofocus, compact }: Props) {
+export function RichEditor({ content, onChange, placeholder, className, autofocus, compact, manuscript, onStats }: Props) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onStatsRef = useRef(onStats);
+  onStatsRef.current = onStats;
+  const [find, setFind] = useState<{ term: string; replace: boolean } | null>(null);
+
+  const report = (editor: Editor) => {
+    if (!onStatsRef.current) return;
+    const { from, to } = editor.state.selection;
+    onStatsRef.current({
+      words: editor.storage.characterCount.words(),
+      characters: editor.storage.characterCount.characters(),
+      selectedWords: from === to ? 0 : countWords(editor.state.doc.textBetween(from, to, " ", " ")),
+    });
+  };
+
+  // Keep the line being written at a steady height, like a typewriter.
+  const centerCaret = (editor: Editor) => {
+    if (!manuscript || !getManuscriptLook().typewriter || !editor.isFocused) return;
+    const scroller = (editor.view.dom as HTMLElement).closest(".manuscript, .content") as HTMLElement | null;
+    if (!scroller) return;
+    const caret = editor.view.coordsAtPos(editor.state.selection.head);
+    const box = scroller.getBoundingClientRect();
+    scroller.scrollTop += caret.top - (box.top + box.height * 0.45);
+  };
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ link: { openOnClick: false } }),
+      StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
       Placeholder.configure({ placeholder: placeholder ?? "Start writing… type @ to link an entry" }),
       CharacterCount,
       LoreMention,
+      ...(compact
+        ? []
+        : [
+            TextAlign.configure({ types: ["heading", "paragraph"] }),
+            Highlight.configure({ multicolor: true }),
+            TextStyle,
+            Color,
+            Subscript,
+            Superscript,
+            Typography,
+            Search,
+            Focus.configure({ className: "has-focus", mode: "shallowest" }),
+          ]),
     ],
+    editorProps: { attributes: { spellcheck: "true" } },
     content: content ?? undefined,
     autofocus: autofocus ? "end" : false,
-    onUpdate: ({ editor }) =>
-      onChangeRef.current(editor.getJSON(), editor.storage.characterCount.words(), editor.isEmpty),
+    onCreate: ({ editor }) => report(editor),
+    onUpdate: ({ editor }) => {
+      onChangeRef.current(editor.getJSON(), editor.storage.characterCount.words(), editor.isEmpty);
+      report(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      report(editor);
+      centerCaret(editor);
+    },
   });
 
   const body = <EditorContent editor={editor} className={`rich ${compact ? "compact" : ""} ${className ?? ""}`} />;
   if (compact || !editor) return body;
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === "f" || e.key === "h")) {
+      e.preventDefault();
+      const { from, to } = editor.state.selection;
+      const selected = from !== to ? editor.state.doc.textBetween(from, to, " ").slice(0, 100) : "";
+      setFind({ term: selected || find?.term || "", replace: e.key === "h" });
+    }
+  };
+
   return (
-    <div className="rich-frame">
-      <FormatBar editor={editor} />
+    <div className="rich-frame" onKeyDown={onKeyDown}>
+      <FormatBar editor={editor} manuscript={manuscript} onFind={() => setFind({ term: "", replace: false })} />
+      {find && <FindBar editor={editor} initial={find.term} withReplace={find.replace} onClose={() => setFind(null)} />}
       {body}
     </div>
   );

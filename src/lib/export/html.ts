@@ -20,9 +20,23 @@ function inline(n: JSONContent, o: HtmlOptions): string {
     if (m.type === "strike") html = `<s>${html}</s>`;
     if (m.type === "underline") html = `<u>${html}</u>`;
     if (m.type === "code") html = `<code>${html}</code>`;
+    if (m.type === "superscript") html = `<sup>${html}</sup>`;
+    if (m.type === "subscript") html = `<sub>${html}</sub>`;
+    if (m.type === "highlight") html = `<mark${safeColor(m.attrs?.color) ? ` style="background-color:${m.attrs!.color}"` : ""}>${html}</mark>`;
+    if (m.type === "textStyle" && safeColor(m.attrs?.color)) html = `<span style="color:${m.attrs!.color}">${html}</span>`;
+    if (m.type === "link" && typeof m.attrs?.href === "string" && /^(https?:|mailto:)/i.test(m.attrs.href))
+      html = `<a href="${esc(m.attrs.href)}">${html}</a>`;
   }
   return html;
 }
+
+/** Only plain colour values reach a style attribute. */
+const safeColor = (c: unknown): c is string => typeof c === "string" && /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(c);
+
+const align = (n: JSONContent) => {
+  const a = n.attrs?.textAlign;
+  return a && a !== "left" && ["center", "right", "justify"].includes(a) ? ` style="text-align:${a}"` : "";
+};
 
 /** TipTap/ProseMirror JSON to XHTML-safe HTML. */
 export function docToHtml(n: JSONContent | null | undefined, o: HtmlOptions): string {
@@ -33,10 +47,10 @@ export function docToHtml(n: JSONContent | null | undefined, o: HtmlOptions): st
     case "doc":
       return kids();
     case "paragraph":
-      return `<p>${inner()}</p>`;
+      return `<p${align(n)}>${inner()}</p>`;
     case "heading": {
       const level = Math.min(6, (n.attrs?.level ?? 1) + o.headingOffset);
-      return `<h${level}>${inner()}</h${level}>`;
+      return `<h${level}${align(n)}>${inner()}</h${level}>`;
     }
     case "blockquote":
       return `<blockquote>${kids()}</blockquote>`;

@@ -7,9 +7,11 @@ import "@fontsource-variable/source-sans-3";
 import "@fontsource-variable/source-sans-3/wght-italic.css";
 import App from "./App";
 import { applyAppearance } from "./lib/theme";
+import { applyManuscriptLook } from "./lib/prefs";
 import "./styles.css";
 
 applyAppearance();
+applyManuscriptLook();
 
 // This is a desktop app: suppress the webview's own right-click menu (Reload, Inspect...)
 // everywhere except text fields, where it provides spellcheck and copy/paste.

@@ -2,6 +2,18 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.4
+
+A much more capable writing editor.
+
+- **More formatting**: alignment, highlight and text colours, superscript and subscript, links, list indenting and clear formatting. Curly quotes, em-dashes and ellipses are typed for you.
+- **Find and replace** in any document (Ctrl+F, Ctrl+H), with match case and whole words.
+- **Live counts**: words, characters, the words in your selection and reading time, plus **word targets** for each chapter and each book, and how much you've written this session.
+- **Focus mode** (F11): full screen with nothing but the page. Optional typewriter scrolling keeps the line you're writing in place, and you can fade the other paragraphs.
+- **Page appearance**: choose the manuscript font, size, line spacing and page width, and switch to novel-style paragraph indents.
+- **Spellcheck** while you write, with suggestions on right-click.
+- Exports keep the new formatting.
+
 ## 0.1.3
 
 A timeline for your world, a new home page, and sharing your whole world.

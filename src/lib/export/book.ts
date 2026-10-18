@@ -2,6 +2,8 @@ import JSZip from "jszip";
 import {
   AlignmentType,
   Document,
+  ExternalHyperlink,
+  ShadingType,
   HeadingLevel,
   Packer,
   PageBreak,
@@ -186,6 +188,7 @@ function inlineMd(n: JSONContent, opts: BookOptions): string {
     if (m.type === "italic") t = `*${t}*`;
     if (m.type === "strike") t = `~~${t}~~`;
     if (m.type === "code") t = `\`${t}\``;
+    if (m.type === "link" && typeof m.attrs?.href === "string") t = `[${t}](${m.attrs.href})`;
   }
   return t;
 }
@@ -236,18 +239,34 @@ function toMarkdown(sections: Section[], opts: BookOptions): Uint8Array {
 
 // ---------------------------------------------------------------- Word
 
+/** "#f2c94c66" -> "F2C94C" (Word has no transparency). */
+const hex6 = (c: unknown) => (typeof c === "string" && /^#[0-9a-f]{6}/i.test(c) ? c.slice(1, 7).toUpperCase() : undefined);
+
+const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> = {
+  center: AlignmentType.CENTER,
+  right: AlignmentType.RIGHT,
+  justify: AlignmentType.JUSTIFIED,
+};
+
 function runs(nodes: JSONContent[] | undefined, opts: BookOptions): ParagraphChild[] {
   return (nodes ?? []).map((n) => {
     if (n.type === "hardBreak") return new TextRun({ text: "", break: 1 });
     if (n.type === "mention") return new TextRun({ text: mentionName(n), smallCaps: !opts.plainLinks });
-    const marks = new Set((n.marks ?? []).map((m) => m.type));
-    return new TextRun({
+    const marks = new Map((n.marks ?? []).map((m) => [m.type, m.attrs ?? {}]));
+    const highlight = hex6(marks.get("highlight")?.color);
+    const run = new TextRun({
       text: n.text ?? "",
       bold: marks.has("bold"),
       italics: marks.has("italic"),
       strike: marks.has("strike"),
-      underline: marks.has("underline") ? {} : undefined,
+      underline: marks.has("underline") || marks.has("link") ? {} : undefined,
+      superScript: marks.has("superscript"),
+      subScript: marks.has("subscript"),
+      color: hex6(marks.get("textStyle")?.color) ?? (marks.has("link") ? "1F6FB2" : undefined),
+      shading: highlight ? { type: ShadingType.CLEAR, fill: highlight, color: "auto" } : undefined,
     });
+    const href = marks.get("link")?.href;
+    return typeof href === "string" && /^(https?:|mailto:)/i.test(href) ? new ExternalHyperlink({ link: href, children: [run] }) : run;
   });
 }
 
@@ -257,9 +276,9 @@ function docxBlocks(n: JSONContent, opts: BookOptions, quote = false): Paragraph
     case "blockquote":
       return (n.content ?? []).flatMap((c) => docxBlocks(c, opts, quote || n.type === "blockquote"));
     case "paragraph":
-      return [new Paragraph({ children: runs(n.content, opts), indent: quote ? { left: 720 } : undefined })];
+      return [new Paragraph({ children: runs(n.content, opts), indent: quote ? { left: 720 } : undefined, alignment: ALIGN[n.attrs?.textAlign] })];
     case "heading":
-      return [new Paragraph({ children: runs(n.content, opts), heading: HeadingLevel.HEADING_3 })];
+      return [new Paragraph({ children: runs(n.content, opts), heading: HeadingLevel.HEADING_3, alignment: ALIGN[n.attrs?.textAlign] })];
     case "bulletList":
     case "orderedList":
       return (n.content ?? []).flatMap((li) =>

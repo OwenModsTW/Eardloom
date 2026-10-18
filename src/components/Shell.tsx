@@ -19,7 +19,7 @@ import { ExportBook } from "./ExportBook";
 import type { Project } from "../lib/types";
 
 export function Shell() {
-  const { world, types, entries, projects, route, back, forward, paletteOpen, go, goBack, goForward, setPalette, closeWorld, refreshProjects } =
+  const { world, types, entries, projects, route, back, forward, paletteOpen, go, goBack, goForward, setPalette, closeWorld, refreshProjects, focusMode } =
     useStore();
 
   const [exportProject, setExportProject] = useState<Project | null>(null);
@@ -46,7 +46,7 @@ export function Shell() {
   }, [goBack, goForward, setPalette, activeType]);
 
   return (
-    <div className="shell">
+    <div className={`shell ${focusMode ? "focus-mode" : ""}`}>
       <nav className="sidebar">
         <div className="sidebar-top">
           <img className="sidebar-logo" src="/logo.png" alt="Eardloom" />

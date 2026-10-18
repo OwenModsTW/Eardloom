@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  PanelRightOpen, Search, Trash2,
+  Maximize2, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
 import { useAutosave } from "../lib/useAutosave";
 import { toParagraphs } from "../lib/text";
-import { MentionClickContext, RichEditor } from "./RichEditor";
+import { MentionClickContext, RichEditor, type EditorStats } from "./RichEditor";
 import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import { assetUrl } from "./EntryView";
@@ -33,9 +33,48 @@ function buildTree(docs: DocSummary[]): TreeNode[] {
 
 type Drop = { targetId: string; where: "before" | "after" | "inside" };
 
+/** Each book's word total when it was first opened this session, for "+N this session". */
+const sessionStarts = new Map<string, number>();
+
+/** Click to set a word target; shows progress once one is set. */
+function TargetMeter({ words, target, onChange, label }: { words: number; target?: number; onChange: (n: number | undefined) => void; label: string }) {
+  const [editing, setEditing] = useState(false);
+  if (editing)
+    return (
+      <input
+        className="target-input"
+        autoFocus
+        inputMode="numeric"
+        defaultValue={target ?? ""}
+        placeholder="Words"
+        onBlur={(e) => {
+          const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
+          onChange(Number.isFinite(n) && n > 0 ? n : undefined);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur()}
+      />
+    );
+  if (!target)
+    return (
+      <button className="link quiet" onClick={() => setEditing(true)}>
+        Set {label} target
+      </button>
+    );
+  const pct = Math.min(100, Math.round((words / target) * 100));
+  return (
+    <button className={`target ${pct >= 100 ? "done" : ""}`} onClick={() => setEditing(true)} title={`${label} target: click to change`}>
+      <span className="target-bar">
+        <span style={{ width: `${pct}%` }} />
+      </span>
+      {pct}% of {target.toLocaleString()}
+    </button>
+  );
+}
+
 export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const project = useStore((s) => s.projects.find((p) => p.id === id));
-  const { go, refreshProjects } = useStore();
+  const { go, refreshProjects, focusMode, setFocusMode } = useStore();
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loreId, setLoreId] = useState<string | null>(null);
@@ -54,8 +93,34 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const tree = useMemo(() => buildTree(docs), [docs]);
   const activeId = docId ?? docs.find((d) => d.kind === "text")?.id;
   const total = docs.reduce((n, d) => n + d.wordCount, 0);
+  useEffect(() => {
+    if (docs.length && !sessionStarts.has(id)) sessionStarts.set(id, total);
+  }, [docs.length, id, total]);
+  const session = total - (sessionStarts.get(id) ?? total);
+
+  // F11 toggles focus mode; Escape leaves it.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "F11") (e.preventDefault(), setFocusMode(!useStore.getState().focusMode));
+      if (e.key === "Escape" && useStore.getState().focusMode && !document.querySelector(".find-bar, .overlay, .menu")) setFocusMode(false);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [setFocusMode]);
 
   if (!project) return <p className="page-note">This project no longer exists.</p>;
+
+  const settings = project.settings as { targets?: Record<string, number>; bookTarget?: number };
+  const saveSettings = async (patch: Partial<typeof settings>) => {
+    await api.saveProject({ ...project, settings: { ...project.settings, ...patch } });
+    await refreshProjects();
+  };
+  const setDocTarget = (docId: string, n: number | undefined) => {
+    const targets = { ...(settings.targets ?? {}) };
+    if (n) targets[docId] = n;
+    else delete targets[docId];
+    saveSettings({ targets });
+  };
 
   const open = (doc: string) => go({ view: "project", id, docId: doc });
 
@@ -197,7 +262,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   };
 
   return (
-    <div className={`project ${loreOpen ? "with-lore" : ""}`}>
+    <div className={`project ${loreOpen && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
       <aside className="binder">
         <ProjectTitle project={project} onSaved={refreshProjects} />
         <div className="binder-actions">
@@ -208,23 +273,38 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <FolderPlus size={14} />
           </button>
           <span className="spacer" />
-          <small>{total.toLocaleString()} words</small>
+          <small>
+            {total.toLocaleString()} words
+            {session > 0 && <span className="session"> · +{session.toLocaleString()} this session</span>}
+          </small>
           <button className="ghost tiny" onClick={() => setExporting(true)} title="Export as ebook, Word or Markdown">
             Export
           </button>
         </div>
         <div className="binder-tree">{tree.map((n) => renderNode(n, 0))}</div>
+        <div className="binder-foot">
+          <TargetMeter label="book" words={total} target={settings.bookTarget} onChange={(bookTarget) => saveSettings({ bookTarget })} />
+        </div>
       </aside>
 
       <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true))}>
         <main className="manuscript">
-          <button className="icon-btn lore-toggle" onClick={() => setLoreOpen(!loreOpen)} title="Toggle lore panel">
-            {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-          </button>
+          <div className="manuscript-tools">
+            <button className="icon-btn" onClick={() => setFocusMode(!focusMode)} title={focusMode ? "Leave focus mode (Esc)" : "Focus mode (F11)"}>
+              {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+            {!focusMode && (
+              <button className="icon-btn" onClick={() => setLoreOpen(!loreOpen)} title="Toggle lore panel">
+                {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+              </button>
+            )}
+          </div>
           {activeId ? (
             <DocEditor
               key={`${activeId}-${editorRev}`}
               id={activeId}
+              target={settings.targets?.[activeId]}
+              onTarget={(n) => setDocTarget(activeId, n)}
               onSaved={(patch) => setDocs((ds) => ds.map((d) => (d.id === patch.id ? { ...d, ...patch } : d)))}
             />
           ) : (
@@ -237,7 +317,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
         </main>
       </MentionClickContext.Provider>
 
-      {loreOpen && <LorePanel entryId={loreId} onPick={setLoreId} />}
+      {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
       {exporting && <ExportBook project={project} onClose={() => setExporting(false)} />}
     </div>
   );
@@ -263,11 +343,21 @@ function ProjectTitle({ project, onSaved }: { project: Project; onSaved: () => v
   );
 }
 
-function DocEditor({ id, onSaved }: { id: string; onSaved: (patch: Partial<DocSummary> & { id: string }) => void }) {
+function DocEditor({
+  id,
+  target,
+  onTarget,
+  onSaved,
+}: {
+  id: string;
+  target?: number;
+  onTarget: (n: number | undefined) => void;
+  onSaved: (patch: Partial<DocSummary> & { id: string }) => void;
+}) {
   const [doc, setDoc] = useState<Doc | null>(null);
-  const [words, setWords] = useState(0);
+  const [stats, setStats] = useState<EditorStats>({ words: 0, characters: 0, selectedWords: 0 });
   useEffect(() => {
-    api.getDoc(id).then((d) => (setDoc(d), setWords(d.wordCount)));
+    api.getDoc(id).then((d) => (setDoc(d), setStats((s) => ({ ...s, words: d.wordCount }))));
   }, [id]);
 
   const { schedule } = useAutosave(async (d: Doc) => {
@@ -299,10 +389,20 @@ function DocEditor({ id, onSaved }: { id: string; onSaved: (patch: Partial<DocSu
           <RichEditor
             content={doc.body}
             className="prose"
+            manuscript
             autofocus
-            onChange={(body, w) => (setWords(w), update({ body }))}
+            onStats={setStats}
+            onChange={(body) => update({ body })}
           />
-          <footer className="doc-footer">{words.toLocaleString()} words</footer>
+          <footer className="doc-footer">
+            <span>
+              {stats.selectedWords > 0 && <strong>{stats.selectedWords.toLocaleString()} of </strong>}
+              {stats.words.toLocaleString()} words
+            </span>
+            <span>{stats.characters.toLocaleString()} characters</span>
+            <span>{Math.max(1, Math.round(stats.words / 250))} min read</span>
+            <TargetMeter label="chapter" words={stats.words} target={target} onChange={onTarget} />
+          </footer>
         </>
       )}
     </div>
