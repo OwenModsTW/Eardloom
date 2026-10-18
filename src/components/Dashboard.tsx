@@ -6,11 +6,13 @@ import { useAutosave } from "../lib/useAutosave";
 import { createEntry, createProject } from "../lib/actions";
 import { EntryGlyph } from "./EntryIcon";
 import { relativeTime } from "./EntryView";
+import { ShareWorld } from "./ShareWorld";
 
 export function Dashboard() {
   const { world, types, entries, projects, go, setWorld } = useStore();
   const [name, setName] = useState(world!.name);
   const [description, setDescription] = useState(world!.description);
+  const [sharing, setSharing] = useState(false);
   const { schedule } = useAutosave(async ([n, d]: [string, string]) => setWorld(await api.updateWorldInfo(n, d)));
 
   const recent = [...entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12);
@@ -19,6 +21,12 @@ export function Dashboard() {
 
   return (
     <div className="page dashboard">
+      <div className="dash-actions">
+        <button className="ghost" onClick={() => setSharing(true)}>
+          Share world…
+        </button>
+      </div>
+      {sharing && <ShareWorld onClose={() => setSharing(false)} />}
       <input
         className="world-title"
         value={name}

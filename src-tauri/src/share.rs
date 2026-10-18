@@ -113,30 +113,26 @@ pub fn export_world_pack(app: AppHandle, state: State<AppState>, dest: String, o
     state.with(|w| write_pack(w, Path::new(&dest), omit_private, &version))
 }
 
-/// Unpacks a world pack into a new folder under `parent_dir` and opens it.
-#[tauri::command]
-pub fn import_world_pack(app: AppHandle, state: State<AppState>, src: String, parent_dir: String) -> CmdResult<WorldInfo> {
-    let mut archive = ZipArchive::new(File::open(&src).map_err(err)?).map_err(|_| "That file isn't a world pack.")?;
+/// Extracts a world pack into a new folder under `parent_dir`, never overwriting anything.
+fn unpack(src: &Path, parent_dir: &Path) -> CmdResult<PathBuf> {
+    let not_a_pack = || "That file isn't a world pack.".to_string();
+    let mut archive = ZipArchive::new(File::open(src).map_err(err)?).map_err(|_| not_a_pack())?;
     let manifest: Manifest = {
         let mut text = String::new();
-        archive
-            .by_name(MANIFEST)
-            .map_err(|_| "That file isn't a world pack.")?
-            .read_to_string(&mut text)
-            .map_err(err)?;
-        serde_json::from_str(&text).map_err(|_| "That file isn't a world pack.")?
+        archive.by_name(MANIFEST).map_err(|_| not_a_pack())?.read_to_string(&mut text).map_err(err)?;
+        serde_json::from_str(&text).map_err(|_| not_a_pack())?
     };
     if manifest.format != PACK_FORMAT {
-        return Err("That file isn't a world pack.".into());
+        return Err(not_a_pack());
     }
 
-    // Never overwrite: "Name", then "Name (2)", "Name (3)"...
+    // "Name", then "Name (2)", "Name (3)"...
     let base = folder_name(&manifest.name);
-    let mut dest = Path::new(&parent_dir).join(&base);
+    let mut dest = parent_dir.join(&base);
     let mut n = 1;
     while dest.exists() {
         n += 1;
-        dest = Path::new(&parent_dir).join(format!("{base} ({n})"));
+        dest = parent_dir.join(format!("{base} ({n})"));
     }
     fs::create_dir_all(dest.join(ASSETS_DIR)).map_err(err)?;
 
@@ -144,6 +140,7 @@ pub fn import_world_pack(app: AppHandle, state: State<AppState>, src: String, pa
         let mut file = archive.by_index(i).map_err(err)?;
         let Ok(name) = file.name().map(|n| n.to_string()) else { continue };
         let Some(rel) = safe_relative(&name) else { continue };
+        // Only the database and loose files in assets/: nothing else is ever written.
         let allowed = rel == Path::new(DB_FILE)
             || (rel.starts_with(ASSETS_DIR) && rel.components().count() == 2 && !file.is_dir());
         if !allowed {
@@ -152,7 +149,17 @@ pub fn import_world_pack(app: AppHandle, state: State<AppState>, src: String, pa
         let mut out = File::create(dest.join(&rel)).map_err(err)?;
         std::io::copy(&mut file, &mut out).map_err(err)?;
     }
+    if !dest.join(DB_FILE).exists() {
+        let _ = fs::remove_dir_all(&dest);
+        return Err(not_a_pack());
+    }
+    Ok(dest)
+}
 
+/// Unpacks a world pack into a new folder under `parent_dir` and opens it.
+#[tauri::command]
+pub fn import_world_pack(app: AppHandle, state: State<AppState>, src: String, parent_dir: String) -> CmdResult<WorldInfo> {
+    let dest = unpack(Path::new(&src), Path::new(&parent_dir))?;
     let conn = db::open(&dest.join(DB_FILE)).map_err(err)?;
     let world = OpenWorld { path: dest, conn };
     let result = info(&world)?;
@@ -229,5 +236,62 @@ mod tests {
         assert_eq!((left, links), (1, 0));
         drop(conn);
         let _ = fs::remove_file(tmp);
+    }
+
+    #[test]
+    fn world_pack_round_trip_leaves_out_private_entries_and_images() {
+        let root = std::env::temp_dir().join(format!("eardloom-pack-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let world_dir = root.join("Source World");
+        fs::create_dir_all(world_dir.join(ASSETS_DIR)).unwrap();
+        fs::write(world_dir.join(ASSETS_DIR).join("hero.png"), b"hero").unwrap();
+        fs::write(world_dir.join(ASSETS_DIR).join("villain.png"), b"villain").unwrap();
+        let conn = db::open(&world_dir.join(DB_FILE)).unwrap();
+        conn.execute_batch(
+            "INSERT INTO meta (key, value) VALUES ('name', 'Source World');
+             INSERT INTO entry_types (id, name, plural) VALUES ('t', 'Character', 'Characters');
+             INSERT INTO entries (id, type_id, title, image, visibility) VALUES
+               ('a', 't', 'Hero', 'hero.png', 'public'),
+               ('b', 't', 'Villain', 'villain.png', 'private');",
+        )
+        .unwrap();
+        let world = OpenWorld { path: world_dir, conn };
+
+        let pack = root.join("shared.eardloom");
+        write_pack(&world, &pack, true, "test").unwrap();
+        let out = unpack(&pack, &root.join("inbox")).unwrap();
+        // Unpacking again never overwrites the first copy.
+        let again = unpack(&pack, &root.join("inbox")).unwrap();
+        assert_ne!(out, again);
+
+        let copy = Connection::open(out.join(DB_FILE)).unwrap();
+        let titles: Vec<String> = copy
+            .prepare("SELECT title FROM entries")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(titles, vec!["Hero"]);
+        assert!(out.join(ASSETS_DIR).join("hero.png").exists());
+        assert!(!out.join(ASSETS_DIR).join("villain.png").exists());
+
+        // A full backup keeps everything.
+        write_pack(&world, &root.join("backup.eardloom"), false, "test").unwrap();
+        let full = unpack(&root.join("backup.eardloom"), &root.join("restore")).unwrap();
+        assert!(full.join(ASSETS_DIR).join("villain.png").exists());
+
+        drop(copy);
+        drop(world);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn refuses_files_that_are_not_world_packs() {
+        let root = std::env::temp_dir().join(format!("eardloom-badpack-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("notes.eardloom"), b"just some text").unwrap();
+        assert!(unpack(&root.join("notes.eardloom"), &root).is_err());
+        let _ = fs::remove_dir_all(&root);
     }
 }

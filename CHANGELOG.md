@@ -1,6 +1,14 @@
 # Changelog
 
-The first line under each version is shown in Eardloom's update banner.
+The first line under each version is the summary shown when Eardloom offers an update.
+
+## 0.1.3
+
+Share your whole world, and format your writing.
+
+- **Share world** (from the world's home page): export a **wiki website** anyone can open in a browser, with entry pages, categories, links, backlinks and search. Upload the folder to Netlify Drop or GitHub Pages to share a link. Private entries are never included, and spoilers sit behind a Reveal button.
+- **World packs**: save a whole world as one `.eardloom` file for another Eardloom user, or as a backup. Open one from the home screen.
+- **Formatting toolbar** on articles and manuscripts: headings, bold, italic, underline, strikethrough, lists, quotes and scene breaks.
 
 ## 0.1.2
 

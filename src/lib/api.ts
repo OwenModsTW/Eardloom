@@ -46,6 +46,11 @@ export const api = {
   moveDocs: (positions: { id: string; parentId: string | null; sort: number }[]) =>
     invoke<void>("move_docs", { positions }),
   deleteDoc: (id: string) => invoke<void>("delete_doc", { id }),
+
+  exportWorldPack: (dest: string, omitPrivate: boolean) => invoke<void>("export_world_pack", { dest, omitPrivate }),
+  importWorldPack: (src: string, parentDir: string) => invoke<WorldInfo>("import_world_pack", { src, parentDir }),
+  writeStaticSite: (dir: string, files: { path: string; content: string }[], assets: string[]) =>
+    invoke<string>("write_static_site", { dir, files, assets }),
 };
 
 export const newId = (): string => crypto.randomUUID();

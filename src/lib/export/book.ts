@@ -11,6 +11,7 @@ import {
 } from "docx";
 import type { JSONContent } from "@tiptap/react";
 import { api } from "../api";
+import { docToHtml, esc } from "./html";
 import { useStore } from "../../store";
 import type { DocSummary } from "../types";
 
@@ -69,54 +70,12 @@ const mentionName = (node: JSONContent) =>
 
 // ---------------------------------------------------------------- HTML (EPUB)
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-function inlineHtml(n: JSONContent, opts: BookOptions): string {
-  if (n.type === "hardBreak") return "<br/>";
-  if (n.type === "mention") {
-    const name = esc(mentionName(n));
-    return opts.plainLinks ? name : `<span class="entry">${name}</span>`;
-  }
-  let html = esc(n.text ?? "");
-  for (const m of n.marks ?? []) {
-    if (m.type === "bold") html = `<strong>${html}</strong>`;
-    if (m.type === "italic") html = `<em>${html}</em>`;
-    if (m.type === "strike") html = `<s>${html}</s>`;
-    if (m.type === "underline") html = `<u>${html}</u>`;
-    if (m.type === "code") html = `<code>${html}</code>`;
-  }
-  return html;
-}
-
-function blockHtml(n: JSONContent, opts: BookOptions): string {
-  const inner = () => (n.content ?? []).map((c) => inlineHtml(c, opts)).join("");
-  const kids = () => (n.content ?? []).map((c) => blockHtml(c, opts)).join("");
-  switch (n.type) {
-    case "doc":
-      return kids();
-    case "paragraph":
-      return `<p>${inner()}</p>`;
-    case "heading": {
-      // Chapter titles are h1/h2, so headings inside a chapter start at h3.
-      const level = Math.min(6, (n.attrs?.level ?? 1) + 2);
-      return `<h${level}>${inner()}</h${level}>`;
-    }
-    case "blockquote":
-      return `<blockquote>${kids()}</blockquote>`;
-    case "bulletList":
-      return `<ul>${kids()}</ul>`;
-    case "orderedList":
-      return `<ol>${kids()}</ol>`;
-    case "listItem":
-      return `<li>${kids()}</li>`;
-    case "codeBlock":
-      return `<pre>${esc((n.content ?? []).map((c) => c.text ?? "").join(""))}</pre>`;
-    case "horizontalRule":
-      return `<hr/>`;
-    default:
-      return n.content ? kids() : "";
-  }
-}
+const blockHtml = (n: JSONContent, opts: BookOptions) =>
+  docToHtml(n, {
+    // Chapter titles are h1/h2, so headings inside a chapter start at h3.
+    headingOffset: 2,
+    mention: (m) => (opts.plainLinks ? esc(mentionName(m)) : `<span class="entry">${esc(mentionName(m))}</span>`),
+  });
 
 const EPUB_CSS = `
 body { font-family: serif; line-height: 1.5; margin: 0 5%; }

@@ -25,6 +25,16 @@ export function Home() {
     }
   };
 
+  const openPack = async () => {
+    const src = await openDialog({ title: "Open a world pack", filters: [{ name: "Eardloom world", extensions: ["eardloom"] }] });
+    if (typeof src !== "string") return;
+    try {
+      await openWorld(await api.importWorldPack(src, await api.defaultWorldsDir()));
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const browse = async () => {
     const dir = await openDialog({ directory: true, title: "Open a world folder" });
     if (typeof dir === "string") openPath(dir);
@@ -43,12 +53,15 @@ export function Home() {
         </div>
       )}
       {creating ? (
-        <NewWorld onCancel={recent.length ? () => setCreating(false) : undefined} onError={setError} />
+        <NewWorld onCancel={recent.length ? () => setCreating(false) : undefined} onError={setError} onOpenPack={openPack} />
       ) : (
         <div className="home-panel">
           <div className="row">
             <h2>Your worlds</h2>
             <span className="spacer" />
+            <button className="ghost" onClick={openPack} title="Open a world someone shared with you">
+              Open world pack…
+            </button>
             <button className="ghost" onClick={browse}>
               <FolderOpen size={15} /> Open folder…
             </button>
@@ -79,7 +92,7 @@ export function Home() {
   );
 }
 
-function NewWorld({ onCancel, onError }: { onCancel?: () => void; onError: (e: string) => void }) {
+function NewWorld({ onCancel, onError, onOpenPack }: { onCancel?: () => void; onError: (e: string) => void; onOpenPack: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [templateId, setTemplateId] = useState("fantasy");
@@ -157,9 +170,13 @@ function NewWorld({ onCancel, onError }: { onCancel?: () => void; onError: (e: s
       </label>
 
       <div className="row">
-        {onCancel && (
+        {onCancel ? (
           <button className="ghost" onClick={onCancel}>
             Cancel
+          </button>
+        ) : (
+          <button className="link quiet" onClick={onOpenPack}>
+            Someone shared a world with you? Open the world pack
           </button>
         )}
         <span className="spacer" />

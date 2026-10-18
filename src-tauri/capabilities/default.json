@@ -8,11 +8,16 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    },
     "dialog:default",
     "process:allow-restart",
     "fs:default",
     "fs:allow-write-file",
     "fs:allow-write-text-file",
+    "fs:allow-exists",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]

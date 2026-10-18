@@ -640,3 +640,7 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .format-bar .select-menu button { width: 100%; justify-content: flex-start; color: var(--text); }
 .format-sep { width: 1px; height: 16px; background: var(--line-strong); margin: 0 5px; }
 .manuscript .format-bar { margin: 0 -8px 18px; }
+.dash-actions { float: right; margin-top: 8px; }
+.dialog.share-world { width: min(560px, 94vw); }
+.share-world-body { padding: 14px 20px 6px; }
+.share-world-body .hint { margin-top: 8px; }
