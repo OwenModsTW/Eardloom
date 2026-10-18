@@ -11,6 +11,7 @@ import { useAutosave } from "../lib/useAutosave";
 import { toParagraphs } from "../lib/text";
 import { MentionClickContext, RichEditor } from "./RichEditor";
 import { openMenu } from "./ContextMenu";
+import { ExportBook } from "./ExportBook";
 import { assetUrl } from "./EntryView";
 import { EntryGlyph } from "./EntryIcon";
 import type { Doc, DocSummary, Entry, FieldValue, Project } from "../lib/types";
@@ -42,6 +43,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [drop, setDrop] = useState<Drop | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [editorRev, setEditorRev] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const reload = useCallback(() => api.listDocs(id).then(setDocs), [id]);
   useEffect(() => {
@@ -206,6 +208,9 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
           </button>
           <span className="spacer" />
           <small>{total.toLocaleString()} words</small>
+          <button className="ghost tiny" onClick={() => setExporting(true)} title="Export as ebook, Word or Markdown">
+            Export
+          </button>
         </div>
         <div className="binder-tree">{tree.map((n) => renderNode(n, 0))}</div>
       </aside>
@@ -232,6 +237,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </MentionClickContext.Provider>
 
       {loreOpen && <LorePanel entryId={loreId} onPick={setLoreId} />}
+      {exporting && <ExportBook project={project} onClose={() => setExporting(false)} />}
     </div>
   );
 }

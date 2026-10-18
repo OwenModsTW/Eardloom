@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { ArrowLeft, ArrowRight, BookOpen, LogOut, Plus, Search } from "lucide-react";
 import { useStore } from "../store";
@@ -13,10 +13,14 @@ import { ProjectView } from "./ProjectView";
 import { SearchPalette } from "./SearchPalette";
 import { Settings } from "./Settings";
 import { openMenu } from "./ContextMenu";
+import { ExportBook } from "./ExportBook";
+import type { Project } from "../lib/types";
 
 export function Shell() {
   const { world, types, entries, projects, route, back, forward, paletteOpen, go, goBack, goForward, setPalette, closeWorld, refreshProjects } =
     useStore();
+
+  const [exportProject, setExportProject] = useState<Project | null>(null);
 
   // The category in view: a category page, or the category of the open entry.
   const activeType =
@@ -101,6 +105,7 @@ export function Shell() {
             onContextMenu={(e) =>
               openMenu(e, [
                 { label: "Open", onClick: () => go({ view: "project", id: p.id }) },
+                { label: "Export…", onClick: () => setExportProject(p) },
                 "separator",
                 {
                   label: "Delete project",
@@ -141,6 +146,7 @@ export function Shell() {
       </main>
 
       {paletteOpen && <SearchPalette />}
+      {exportProject && <ExportBook project={exportProject} onClose={() => setExportProject(null)} />}
     </div>
   );
 }
