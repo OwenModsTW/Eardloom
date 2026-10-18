@@ -689,3 +689,5 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .chron-label { font-weight: 400; color: var(--muted); font-size: 13px; }
 .chron-date { font-size: 13px; color: var(--muted); font-family: var(--serif); font-style: italic; }
 .chron-summary { margin: 3px 0 0; color: var(--text-soft); font-size: 14px; }
+.menu-label { margin: 4px 8px 2px; font-size: 11.5px; font-weight: 650; letter-spacing: 0.04em; color: var(--muted); }
+.mention-list { max-height: 340px; }

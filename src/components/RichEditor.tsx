@@ -14,6 +14,8 @@ import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { useStore } from "../store";
 import { EntryGlyph } from "./EntryIcon";
+import { TypeIcon } from "../lib/icons";
+import { createEntry } from "../lib/actions";
 import { FormatBar } from "./FormatBar";
 import type { EntrySummary } from "../lib/types";
 
@@ -42,26 +44,45 @@ interface ListHandle {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 }
 
-const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ items, command }, ref) => {
-  const [index, setIndex] = useState(0);
+const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ items, command, query }, ref) => {
+  const [index, setIndex] = useState(items.length ? 0 : -1);
   const types = useStore((s) => s.types);
-  useEffect(() => setIndex(0), [items]);
+  const name = query.trim();
+  // Offer to create the entry when nothing matches the name exactly.
+  const exact = items.some((e) => [e.title, ...e.aliases].some((n) => n.toLowerCase() === name.toLowerCase()));
+  const looksLikeName = name.length > 0 && name.split(/\s+/).length <= 6;
+  const creates = looksLikeName && !exact ? types : [];
+  const total = items.length + creates.length;
+  // With no matches nothing is pre-selected, so Enter still starts a new line.
+  useEffect(() => setIndex(items.length ? 0 : -1), [items, name]);
 
-  const pick = (i: number) => {
-    const item = items[i];
-    if (item) command({ id: item.id, label: item.title } as never);
+  const pick = async (i: number) => {
+    if (i < items.length) {
+      const item = items[i];
+      return command({ id: item.id, label: item.title } as never);
+    }
+    const type = creates[i - items.length];
+    if (!type) return;
+    const created = await createEntry(type.id, name, false);
+    command({ id: created.id, label: created.title } as never);
+    useStore.getState().notify(`Added ${created.title} to ${type.plural}`);
   };
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
-      if (event.key === "ArrowUp") return setIndex((i) => (i + items.length - 1) % Math.max(items.length, 1)), true;
-      if (event.key === "ArrowDown") return setIndex((i) => (i + 1) % Math.max(items.length, 1)), true;
-      if (event.key === "Enter" || event.key === "Tab") return pick(index), true;
+      if (event.key === "ArrowUp") return setIndex((i) => (i <= 0 ? total - 1 : i - 1)), true;
+      if (event.key === "ArrowDown") return setIndex((i) => (i + 1) % Math.max(total, 1)), true;
+      if ((event.key === "Enter" || event.key === "Tab") && index >= 0 && index < total) return pick(index), true;
       return false;
     },
   }));
 
-  if (!items.length) return <div className="menu mention-list"><p className="menu-note">No matching entries. Create it first, or press Ctrl+K.</p></div>;
+  if (!total)
+    return (
+      <div className="menu mention-list">
+        <p className="menu-note">Type a name to link an entry, or to create a new one.</p>
+      </div>
+    );
   return (
     <div className="menu mention-list">
       {items.map((item, i) => {
@@ -81,6 +102,28 @@ const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ ite
           </button>
         );
       })}
+      {creates.length > 0 && (
+        <>
+          {items.length > 0 && <hr />}
+          <p className="menu-label">Create “{name}” in…</p>
+          {creates.map((t, j) => {
+            const i = items.length + j;
+            return (
+              <button
+                key={t.id}
+                className={i === index ? "active" : ""}
+                onMouseEnter={() => setIndex(i)}
+                onMouseDown={(e) => (e.preventDefault(), pick(i))}
+              >
+                <span className="menu-icon">
+                  <TypeIcon name={t.icon} size={13} color={t.color} />
+                </span>
+                <span>{t.plural}</span>
+              </button>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 });
@@ -111,6 +154,8 @@ const LoreMention = Mention.extend({
   renderText: ({ node }) => node.attrs.label ?? "",
   suggestion: {
     char: "@",
+    // Names have spaces: "@Captain Rhys".
+    allowSpaces: true,
     items: ({ query }) => matchEntries(query),
     render: () => {
       let renderer: ReactRenderer<ListHandle, SuggestionProps<EntrySummary>> | null = null;
