@@ -381,3 +381,17 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>) -> CmdR
         rows.collect::<Result<_, _>>().map_err(err)
     })
 }
+
+/// How many distinct entries or documents link to each entry. Entries missing
+/// from the map have no incoming links at all.
+#[tauri::command]
+pub fn incoming_link_counts(state: State<AppState>) -> CmdResult<std::collections::HashMap<String, i64>> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare("SELECT target_id, COUNT(DISTINCT source_kind || source_id) FROM links GROUP BY target_id")
+            .map_err(err)?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).map_err(err)?;
+        rows.collect::<Result<_, _>>().map_err(err)
+    })
+}

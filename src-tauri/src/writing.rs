@@ -251,3 +251,59 @@ pub fn delete_doc(state: State<AppState>, id: String) -> CmdResult<()> {
         tx.commit().map_err(err)
     })
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentDoc {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub word_count: i64,
+    pub updated_at: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTotals {
+    pub project_id: String,
+    pub words: i64,
+    pub documents: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WritingOverview {
+    pub recent: Vec<RecentDoc>,
+    pub totals: Vec<ProjectTotals>,
+}
+
+/// What was written last, and how big each project is, for the dashboard.
+#[tauri::command]
+pub fn writing_overview(state: State<AppState>) -> CmdResult<WritingOverview> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT id, project_id, title, word_count, updated_at FROM docs
+                  WHERE kind = 'text' ORDER BY updated_at DESC LIMIT 5",
+            )
+            .map_err(err)?;
+        let recent = stmt
+            .query_map([], |r| {
+                Ok(RecentDoc { id: r.get(0)?, project_id: r.get(1)?, title: r.get(2)?, word_count: r.get(3)?, updated_at: r.get(4)? })
+            })
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        let mut stmt = w
+            .conn
+            .prepare("SELECT project_id, SUM(word_count), COUNT(*) FROM docs WHERE kind = 'text' GROUP BY project_id")
+            .map_err(err)?;
+        let totals = stmt
+            .query_map([], |r| Ok(ProjectTotals { project_id: r.get(0)?, words: r.get(1)?, documents: r.get(2)? }))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        Ok(WritingOverview { recent, totals })
+    })
+}

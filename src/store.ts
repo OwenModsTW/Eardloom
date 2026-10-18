@@ -19,6 +19,9 @@ interface State {
   entries: EntrySummary[];
   projects: Project[];
   calendar: Calendar;
+  /** Entries pinned to the world's home page. */
+  pinned: string[];
+  cover: string | null;
 
   route: Route;
   back: Route[];
@@ -30,6 +33,8 @@ interface State {
   closeWorld: () => Promise<void>;
   setWorld: (world: WorldInfo) => void;
   setCalendar: (calendar: Calendar) => Promise<void>;
+  togglePin: (id: string) => Promise<void>;
+  setCover: (asset: string | null) => Promise<void>;
   refreshTypes: () => Promise<void>;
   refreshEntries: () => Promise<void>;
   refreshProjects: () => Promise<void>;
@@ -52,6 +57,8 @@ export const useStore = create<State>((set, get) => ({
   entries: [],
   projects: [],
   calendar: EMPTY_CALENDAR,
+  pinned: [],
+  cover: null,
   route: { view: "dashboard" },
   back: [],
   forward: [],
@@ -65,13 +72,41 @@ export const useStore = create<State>((set, get) => ({
       api.listProjects(),
       api.getCalendar(),
     ]);
-    set({ world, types, entries, projects, calendar: calendar ?? EMPTY_CALENDAR, route: { view: "dashboard" }, back: [], forward: [] });
+    const [pinnedRaw, cover] = await Promise.all([api.getWorldSetting("pinned"), api.getWorldSetting("cover")]);
+    let pinned: string[] = [];
+    try {
+      pinned = JSON.parse(pinnedRaw ?? "[]");
+    } catch {
+      /* start fresh */
+    }
+    set({
+      world,
+      types,
+      entries,
+      projects,
+      calendar: calendar ?? EMPTY_CALENDAR,
+      pinned,
+      cover,
+      route: { view: "dashboard" },
+      back: [],
+      forward: [],
+    });
   },
   closeWorld: async () => {
     await api.closeWorld();
     set({ world: null, types: [], entries: [], projects: [], back: [], forward: [] });
   },
   setWorld: (world) => set({ world }),
+  togglePin: async (id) => {
+    const { pinned } = get();
+    const next = pinned.includes(id) ? pinned.filter((x) => x !== id) : [...pinned, id];
+    set({ pinned: next });
+    await api.setWorldSetting("pinned", JSON.stringify(next));
+  },
+  setCover: async (cover) => {
+    set({ cover });
+    await api.setWorldSetting("cover", cover);
+  },
   setCalendar: async (calendar) => {
     set({ calendar });
     await api.saveCalendar(calendar);

@@ -243,3 +243,22 @@ pub fn read_asset(state: State<AppState>, name: String) -> CmdResult<tauri::ipc:
         fs::read(path).map(tauri::ipc::Response::new).map_err(err)
     })
 }
+
+/// Per-world settings that live alongside the world (not per computer).
+const WORLD_SETTINGS: &[&str] = &["cover", "pinned"];
+
+#[tauri::command]
+pub fn get_world_setting(state: State<AppState>, key: String) -> CmdResult<Option<String>> {
+    if !WORLD_SETTINGS.contains(&key.as_str()) {
+        return Err(format!("Unknown setting: {key}"));
+    }
+    state.with(|w| get_meta(&w.conn, &key).map(|v| (!v.is_empty()).then_some(v)))
+}
+
+#[tauri::command]
+pub fn set_world_setting(state: State<AppState>, key: String, value: Option<String>) -> CmdResult<()> {
+    if !WORLD_SETTINGS.contains(&key.as_str()) {
+        return Err(format!("Unknown setting: {key}"));
+    }
+    state.with(|w| set_meta(&w.conn, &key, value.as_deref().unwrap_or("")))
+}

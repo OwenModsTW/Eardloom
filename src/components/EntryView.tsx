@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, ImagePlus, MoreHorizontal, Share2, Trash2 } from "lucide-react";
+import { Copy, ImagePlus, MoreHorizontal, Pin, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -107,6 +107,11 @@ function EntryEditor({ initial }: { initial: Entry }) {
   const menu: MenuItem[] = [
     { label: entry.image ? "Replace image…" : "Add image…", icon: <ImagePlus size={14} />, onClick: pickImage },
     ...(entry.image ? [{ label: "Remove image", onClick: () => update({ image: null }) }] : []),
+    {
+      label: useStore.getState().pinned.includes(entry.id) ? "Unpin from home" : "Pin to home",
+      icon: <Pin size={14} />,
+      onClick: () => useStore.getState().togglePin(entry.id),
+    },
     { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
     "separator",

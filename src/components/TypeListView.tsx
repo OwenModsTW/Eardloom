@@ -51,6 +51,10 @@ export function TypeListView({ typeId }: { typeId: string }) {
   const rowMenu = (e: React.MouseEvent, entry: EntrySummary) =>
     openMenu(e, [
       { label: "Open", onClick: () => go({ view: "entry", id: entry.id }) },
+      {
+        label: useStore.getState().pinned.includes(entry.id) ? "Unpin from home" : "Pin to home",
+        onClick: () => useStore.getState().togglePin(entry.id),
+      },
       { label: "Duplicate", icon: <Copy size={14} />, onClick: () => duplicateEntry(entry.id) },
       "separator",
       { label: "Delete", icon: <Trash2 size={14} />, danger: true, onClick: () => confirmDeleteEntry(entry.id, entry.title) },

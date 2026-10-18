@@ -49,6 +49,14 @@ export const api = {
     invoke<void>("move_docs", { positions }),
   deleteDoc: (id: string) => invoke<void>("delete_doc", { id }),
 
+  getWorldSetting: (key: "cover" | "pinned") => invoke<string | null>("get_world_setting", { key }),
+  setWorldSetting: (key: "cover" | "pinned", value: string | null) => invoke<void>("set_world_setting", { key, value }),
+  writingOverview: () =>
+    invoke<{
+      recent: { id: string; projectId: string; title: string; wordCount: number; updatedAt: string }[];
+      totals: { projectId: string; words: number; documents: number }[];
+    }>("writing_overview"),
+  incomingLinkCounts: () => invoke<Record<string, number>>("incoming_link_counts"),
   getCalendar: () => invoke<Calendar | null>("get_calendar"),
   saveCalendar: (calendar: Calendar) => invoke<void>("save_calendar", { calendar }),
   timelineItems: () => invoke<TimelineItem[]>("timeline_items"),

@@ -4,8 +4,11 @@ The first line under each version is the summary shown when Eardloom offers an u
 
 ## 0.1.3
 
-Share your whole world, and format your writing.
+A timeline for your world, a new home page, and sharing your whole world.
 
+- **Timeline**: give your world its own calendar (eras, months, any way of counting years), add **Date on the timeline** fields to any category (an event's date, a character's birth, a span like a war or a reign), and see everything in order on the new Timeline page.
+- **A new world home page**: a cover image, pick up the chapter you were writing, pinned entries, your codex at a glance, the latest on your timeline, and a to-do list of entries that need a summary or that nothing links to yet.
+- **Create entries as you write**: type @ and a name that doesn't exist yet, choose a category, and it's created and linked in one go.
 - **Share world** (from the world's home page): export a **wiki website** anyone can open in a browser, with entry pages, categories, links, backlinks and search. Upload the folder to Netlify Drop or GitHub Pages to share a link. Private entries are never included, and spoilers sit behind a Reveal button.
 - **World packs**: save a whole world as one `.eardloom` file for another Eardloom user, or as a backup. Open one from the home screen.
 - **Formatting toolbar** on articles and manuscripts: headings, bold, italic, underline, strikethrough, lists, quotes and scene breaks.

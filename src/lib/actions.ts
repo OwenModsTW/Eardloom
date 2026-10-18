@@ -58,8 +58,9 @@ export async function confirmDeleteEntry(id: string, title: string) {
   const { ask } = await import("@tauri-apps/plugin-dialog");
   if (!(await ask(`Delete "${title || "Untitled"}"? This can't be undone.`, { title: "Delete entry", kind: "warning" }))) return false;
   await api.deleteEntry(id);
-  const { removeEntry, notify } = useStore.getState();
+  const { removeEntry, notify, pinned, togglePin } = useStore.getState();
   removeEntry(id);
+  if (pinned.includes(id)) await togglePin(id);
   notify(`Deleted ${title || "entry"}`);
   return true;
 }
