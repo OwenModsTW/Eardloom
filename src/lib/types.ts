@@ -11,7 +11,8 @@ export type FieldKind =
   | "entry"
   | "entries"
   | "list"
-  | "url";
+  | "url"
+  | "worlddate";
 
 export interface FieldDef {
   /** Stable id: values are stored under this, so labels can be renamed freely. */
@@ -25,6 +26,45 @@ export interface FieldDef {
   /** Optional heading the field is grouped under in the infobox. */
   section?: string;
   help?: string;
+}
+
+/** A year in an era (era-relative), optionally narrowed to a month and day. */
+export interface WorldDatePoint {
+  era?: string;
+  year: number;
+  /** Index into the calendar's months. */
+  month?: number;
+  day?: number;
+}
+
+export interface WorldDate extends WorldDatePoint {
+  /** For spans: reigns, wars, lifetimes. */
+  end?: WorldDatePoint;
+  /** "circa" */
+  approx?: boolean;
+}
+
+export interface Era {
+  id: string;
+  name: string;
+  abbr: string;
+  /** Length in years. The last era is usually open-ended (null). */
+  length: number | null;
+}
+
+export interface Calendar {
+  eras: Era[];
+  months: { name: string; days: number }[];
+}
+
+export interface TimelineItem {
+  entryId: string;
+  typeId: string;
+  title: string;
+  summary: string;
+  emoji: string | null;
+  fieldId: string;
+  date: WorldDate;
 }
 
 export interface EntryType {

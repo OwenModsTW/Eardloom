@@ -1,7 +1,8 @@
 import { api } from "../api";
 import { useStore } from "../../store";
 import { toParagraphs } from "../text";
-import type { Entry, EntryType, FieldValue } from "../types";
+import type { Entry, EntryType, FieldValue, WorldDate } from "../types";
+import { formatDate } from "../calendar";
 
 export type CardLayout = "portrait" | "banner";
 export type CardTheme = "dark" | "light";
@@ -34,6 +35,7 @@ export function fieldText(value: FieldValue | undefined, kind: string): string |
     const names = ids.map((id) => entries.find((e) => e.id === id)?.title).filter(Boolean);
     return names.length ? names.join(", ") : null;
   }
+  if (kind === "worlddate") return formatDate(useStore.getState().calendar, value as WorldDate) || null;
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (Array.isArray(value)) return value.length ? value.join(", ") : null;
   if (typeof value === "object") return toParagraphs(value).join(" ") || null;

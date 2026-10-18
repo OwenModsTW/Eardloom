@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Backlink,
+  Calendar,
+  TimelineItem,
   Doc,
   DocSummary,
   Entry,
@@ -47,6 +49,9 @@ export const api = {
     invoke<void>("move_docs", { positions }),
   deleteDoc: (id: string) => invoke<void>("delete_doc", { id }),
 
+  getCalendar: () => invoke<Calendar | null>("get_calendar"),
+  saveCalendar: (calendar: Calendar) => invoke<void>("save_calendar", { calendar }),
+  timelineItems: () => invoke<TimelineItem[]>("timeline_items"),
   exportWorldPack: (dest: string, omitPrivate: boolean) => invoke<void>("export_world_pack", { dest, omitPrivate }),
   importWorldPack: (src: string, parentDir: string) => invoke<WorldInfo>("import_world_pack", { src, parentDir }),
   writeStaticSite: (dir: string, files: { path: string; content: string }[], assets: string[]) =>

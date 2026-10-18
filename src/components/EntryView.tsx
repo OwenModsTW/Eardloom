@@ -237,9 +237,9 @@ function Infobox({
   if (!type.fields.length)
     return (
       <p className="infobox-empty">
-        {type.plural} don't have any fields yet.{" "}
+        No fields yet.{" "}
         <button className="link" onClick={() => go({ view: "schema", typeId: type.id })}>
-          Choose what to track
+          Choose what to track for {type.plural.toLowerCase()}
         </button>
       </p>
     );

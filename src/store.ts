@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "./lib/api";
-import type { EntrySummary, EntryType, Project, WorldInfo } from "./lib/types";
+import type { Calendar, EntrySummary, EntryType, Project, WorldInfo } from "./lib/types";
+import { EMPTY_CALENDAR } from "./lib/calendar";
 
 export type Route =
   | { view: "dashboard" }
@@ -8,13 +9,16 @@ export type Route =
   | { view: "entry"; id: string }
   | { view: "project"; id: string; docId?: string }
   | { view: "schema"; typeId?: string }
-  | { view: "settings" };
+  | { view: "settings" }
+  | { view: "timeline" }
+  | { view: "calendar" };
 
 interface State {
   world: WorldInfo | null;
   types: EntryType[];
   entries: EntrySummary[];
   projects: Project[];
+  calendar: Calendar;
 
   route: Route;
   back: Route[];
@@ -25,6 +29,7 @@ interface State {
   openWorld: (world: WorldInfo) => Promise<void>;
   closeWorld: () => Promise<void>;
   setWorld: (world: WorldInfo) => void;
+  setCalendar: (calendar: Calendar) => Promise<void>;
   refreshTypes: () => Promise<void>;
   refreshEntries: () => Promise<void>;
   refreshProjects: () => Promise<void>;
@@ -46,6 +51,7 @@ export const useStore = create<State>((set, get) => ({
   types: [],
   entries: [],
   projects: [],
+  calendar: EMPTY_CALENDAR,
   route: { view: "dashboard" },
   back: [],
   forward: [],
@@ -53,14 +59,23 @@ export const useStore = create<State>((set, get) => ({
   toast: null,
 
   openWorld: async (world) => {
-    const [types, entries, projects] = await Promise.all([api.listTypes(), api.listEntries(), api.listProjects()]);
-    set({ world, types, entries, projects, route: { view: "dashboard" }, back: [], forward: [] });
+    const [types, entries, projects, calendar] = await Promise.all([
+      api.listTypes(),
+      api.listEntries(),
+      api.listProjects(),
+      api.getCalendar(),
+    ]);
+    set({ world, types, entries, projects, calendar: calendar ?? EMPTY_CALENDAR, route: { view: "dashboard" }, back: [], forward: [] });
   },
   closeWorld: async () => {
     await api.closeWorld();
     set({ world: null, types: [], entries: [], projects: [], back: [], forward: [] });
   },
   setWorld: (world) => set({ world }),
+  setCalendar: async (calendar) => {
+    set({ calendar });
+    await api.saveCalendar(calendar);
+  },
   refreshTypes: async () => set({ types: await api.listTypes() }),
   refreshEntries: async () => set({ entries: await api.listEntries() }),
   refreshProjects: async () => set({ projects: await api.listProjects() }),

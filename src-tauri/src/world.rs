@@ -85,14 +85,14 @@ pub(crate) fn remember(app: &AppHandle, path: &Path, name: &str) -> CmdResult<()
     write_recent(app, &list)
 }
 
-fn get_meta(conn: &Connection, key: &str) -> CmdResult<String> {
+pub(crate) fn get_meta(conn: &Connection, key: &str) -> CmdResult<String> {
     conn.query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
         .optional()
         .map(|v| v.unwrap_or_default())
         .map_err(err)
 }
 
-fn set_meta(conn: &Connection, key: &str, value: &str) -> CmdResult<()> {
+pub(crate) fn set_meta(conn: &Connection, key: &str, value: &str) -> CmdResult<()> {
     conn.execute(
         "INSERT INTO meta (key, value) VALUES (?1, ?2)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",

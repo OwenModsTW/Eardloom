@@ -35,7 +35,7 @@ export function ShareWorld({ onClose }: { onClose: () => void }) {
       const base = `${parent}/${safeName(world.name)} wiki`;
       let dir = base;
       for (let n = 2; await exists(dir); n++) dir = `${base} (${n})`;
-      const { files, assets, count } = await buildSite(world, types, { includeSpoilers });
+      const { files, assets, count } = await buildSite(world, types, { includeSpoilers }, useStore.getState().calendar);
       setBusy("Writing files…");
       const index = await api.writeStaticSite(dir, files, assets);
       notify(`Website created with ${count} entries`);

@@ -14,7 +14,8 @@ import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import { assetUrl } from "./EntryView";
 import { EntryGlyph } from "./EntryIcon";
-import type { Doc, DocSummary, Entry, FieldValue, Project } from "../lib/types";
+import type { Doc, DocSummary, Entry, FieldValue, Project, WorldDate } from "../lib/types";
+import { formatDate } from "../lib/calendar";
 
 interface TreeNode extends DocSummary {
   children: TreeNode[];
@@ -309,7 +310,7 @@ function DocEditor({ id, onSaved }: { id: string; onSaved: (patch: Partial<DocSu
 }
 
 function LorePanel({ entryId, onPick }: { entryId: string | null; onPick: (id: string | null) => void }) {
-  const { entries, types, go } = useStore();
+  const { entries, types, go, calendar } = useStore();
   const world = useStore((s) => s.world)!;
   const [query, setQuery] = useState("");
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -339,6 +340,7 @@ function LorePanel({ entryId, onPick }: { entryId: string | null; onPick: (id: s
         ) : null;
       });
     }
+    if (kind === "worlddate") return formatDate(calendar, v as WorldDate) || null;
     if (typeof v === "boolean") return v ? "Yes" : "No";
     if (typeof v === "object" && !Array.isArray(v)) return toParagraphs(v).join(" ");
     return Array.isArray(v) ? v.join(", ") : String(v);

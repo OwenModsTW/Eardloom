@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, ArrowRight, BookOpen, LogOut, Plus, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Plus, Search } from "lucide-react";
 import { useStore } from "../store";
 import { api } from "../lib/api";
 import { TypeIcon } from "../lib/icons";
@@ -12,6 +12,8 @@ import { SchemaEditor } from "./SchemaEditor";
 import { ProjectView } from "./ProjectView";
 import { SearchPalette } from "./SearchPalette";
 import { Settings } from "./Settings";
+import { TimelineView } from "./TimelineView";
+import { CalendarEditor } from "./CalendarEditor";
 import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import type { Project } from "../lib/types";
@@ -87,8 +89,17 @@ export function Shell() {
             <small>{entries.filter((e) => e.typeId === t.id).length || ""}</small>
           </button>
         ))}
-        <button className={`nav-item quiet ${route.view === "schema" ? "active" : ""}`} onClick={() => go({ view: "schema" })}>
-          <span>World structure…</span>
+        <div className="nav-heading">World</div>
+        <button
+          className={`nav-item ${route.view === "timeline" || route.view === "calendar" ? "active" : ""}`}
+          onClick={() => go({ view: "timeline" })}
+        >
+          <Hourglass size={14} className="type-glyph" />
+          <span>Timeline</span>
+        </button>
+        <button className={`nav-item ${route.view === "schema" ? "active" : ""}`} onClick={() => go({ view: "schema" })}>
+          <LayoutGrid size={14} className="type-glyph" />
+          <span>Structure</span>
         </button>
 
         <div className="nav-heading">
@@ -143,6 +154,8 @@ export function Shell() {
         {route.view === "schema" && <SchemaEditor typeId={route.typeId} />}
         {route.view === "project" && <ProjectView id={route.id} docId={route.docId} />}
         {route.view === "settings" && <Settings />}
+        {route.view === "timeline" && <TimelineView />}
+        {route.view === "calendar" && <CalendarEditor />}
       </main>
 
       {paletteOpen && <SearchPalette />}

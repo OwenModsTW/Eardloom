@@ -1,7 +1,8 @@
 import type { JSONContent } from "@tiptap/react";
 import { api } from "../api";
 import { docToHtml, esc } from "./html";
-import type { Entry, EntryType, WorldInfo } from "../types";
+import type { Calendar, Entry, EntryType, WorldDate, WorldInfo } from "../types";
+import { EMPTY_CALENDAR, formatDate } from "../calendar";
 
 export interface SiteOptions {
   /** Include spoiler entries behind a "Reveal" gate, or leave them out entirely. */
@@ -123,7 +124,7 @@ const SEARCH_JS = `
  * Builds a self-contained wiki for the world. Private entries are never included;
  * links to anything left out become plain text.
  */
-export async function buildSite(world: WorldInfo, types: EntryType[], opts: SiteOptions) {
+export async function buildSite(world: WorldInfo, types: EntryType[], opts: SiteOptions, calendar: Calendar = EMPTY_CALENDAR) {
   const summaries = await api.listEntries();
   const all: Entry[] = [];
   for (const s of summaries) all.push(await api.getEntry(s.id));
@@ -212,7 +213,8 @@ ${visibleTypes
       if (f.kind === "entry" || f.kind === "entries") {
         const ids = (Array.isArray(v) ? v : [String(v)]).filter((id) => byId.has(id));
         html = ids.map((id) => link(id)).join(", ");
-      } else if (f.kind === "longtext" && typeof v === "object") html = rich(v as JSONContent);
+      } else if (f.kind === "worlddate") html = esc(formatDate(calendar, v as WorldDate));
+      else if (f.kind === "longtext" && typeof v === "object") html = rich(v as JSONContent);
       else if (typeof v === "boolean") html = v ? "Yes" : "No";
       else if (Array.isArray(v)) html = v.map((x) => esc(String(x))).join(", ");
       else if (f.kind === "url") html = `<a href="${esc(String(v))}" rel="noopener">${esc(String(v))}</a>`;

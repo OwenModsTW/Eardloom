@@ -1,6 +1,7 @@
 mod codex;
 mod db;
 mod share;
+mod timeline;
 mod world;
 mod writing;
 
@@ -47,6 +48,9 @@ pub fn run() {
             share::export_world_pack,
             share::import_world_pack,
             share::write_static_site,
+            timeline::get_calendar,
+            timeline::save_calendar,
+            timeline::timeline_items,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

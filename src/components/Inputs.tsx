@@ -5,6 +5,7 @@ import { useStore } from "../store";
 import { createEntry } from "../lib/actions";
 import { RichEditor } from "./RichEditor";
 import { Select } from "./Select";
+import { DateInput } from "./DateInput";
 import { EntryGlyph } from "./EntryIcon";
 import type { FieldDef, FieldValue } from "../lib/types";
 
@@ -279,6 +280,8 @@ export function FieldInput({
       );
     case "url":
       return <input className="inline" value={(v as string) ?? ""} placeholder="https://" onChange={(e) => onChange(e.target.value)} />;
+    case "worlddate":
+      return <DateInput value={v} onChange={onChange} />;
     case "date":
       // Free text on purpose: fictional calendars ("3rd Age, 1042") rarely fit a date picker.
       return <input className="inline" value={(v as string) ?? ""} placeholder="e.g. 1042, Third Age" onChange={(e) => onChange(e.target.value)} />;
