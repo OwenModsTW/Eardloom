@@ -1,5 +1,6 @@
 mod codex;
 mod db;
+mod share;
 mod world;
 mod writing;
 
@@ -43,6 +44,9 @@ pub fn run() {
             writing::save_doc,
             writing::move_docs,
             writing::delete_doc,
+            share::export_world_pack,
+            share::import_world_pack,
+            share::write_static_site,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

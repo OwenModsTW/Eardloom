@@ -625,3 +625,18 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .markdown li::marker { color: var(--accent); }
 .markdown strong { color: var(--text); font-weight: 600; }
 .update-dialog .progress { width: 140px; }
+
+/* ---------- formatting toolbar ---------- */
+.format-bar {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 1px;
+  margin: 0 -8px 12px; padding: 4px 6px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.format-bar button { display: grid; place-items: center; width: 28px; height: 26px; border-radius: var(--r); color: var(--muted); }
+.format-bar button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.format-bar button.on { background: var(--bg-active); color: var(--accent); }
+.format-bar .format-style { width: 116px; }
+.format-bar .format-style .select-trigger { height: 26px; padding: 0 6px; font-size: 13.5px; color: var(--text-soft); border-radius: var(--r); }
+.format-bar .format-style .select-trigger:hover { background: var(--bg-hover); }
+.format-bar .select-menu button { width: 100%; justify-content: flex-start; color: var(--text); }
+.format-sep { width: 1px; height: 16px; background: var(--line-strong); margin: 0 5px; }
+.manuscript .format-bar { margin: 0 -8px 18px; }

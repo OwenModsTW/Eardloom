@@ -72,7 +72,7 @@ fn write_recent(app: &AppHandle, list: &[RecentWorld]) -> CmdResult<()> {
     fs::write(recent_file(app)?, json).map_err(err)
 }
 
-fn remember(app: &AppHandle, path: &Path, name: &str) -> CmdResult<()> {
+pub(crate) fn remember(app: &AppHandle, path: &Path, name: &str) -> CmdResult<()> {
     let path = path.to_string_lossy().to_string();
     let mut list = read_recent(app);
     list.retain(|w| w.path != path);
@@ -102,7 +102,7 @@ fn set_meta(conn: &Connection, key: &str, value: &str) -> CmdResult<()> {
     .map_err(err)
 }
 
-fn info(world: &OpenWorld) -> CmdResult<WorldInfo> {
+pub(crate) fn info(world: &OpenWorld) -> CmdResult<WorldInfo> {
     Ok(WorldInfo {
         path: world.path.to_string_lossy().to_string(),
         assets_path: world.path.join(ASSETS_DIR).to_string_lossy().to_string(),
@@ -113,7 +113,7 @@ fn info(world: &OpenWorld) -> CmdResult<WorldInfo> {
 }
 
 /// Strips characters Windows/macOS won't accept in a folder name.
-fn folder_name(name: &str) -> String {
+pub(crate) fn folder_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
         .map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { '-' } else { c })

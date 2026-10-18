@@ -14,6 +14,7 @@ import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { useStore } from "../store";
 import { EntryGlyph } from "./EntryIcon";
+import { FormatBar } from "./FormatBar";
 import type { EntrySummary } from "../lib/types";
 
 /** Lets the surrounding view decide what clicking a mention does (navigate, open in side panel...). */
@@ -175,5 +176,12 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
       onChangeRef.current(editor.getJSON(), editor.storage.characterCount.words(), editor.isEmpty),
   });
 
-  return <EditorContent editor={editor} className={`rich ${compact ? "compact" : ""} ${className ?? ""}`} />;
+  const body = <EditorContent editor={editor} className={`rich ${compact ? "compact" : ""} ${className ?? ""}`} />;
+  if (compact || !editor) return body;
+  return (
+    <div className="rich-frame">
+      <FormatBar editor={editor} />
+      {body}
+    </div>
+  );
 }
