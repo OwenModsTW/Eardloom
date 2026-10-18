@@ -228,3 +228,18 @@ pub fn import_asset(state: State<AppState>, source: String) -> CmdResult<String>
         Ok(name)
     })
 }
+
+/// Raw bytes of a file in the world's assets folder, for drawing images onto
+/// share cards (a canvas can't read the asset protocol's URLs directly).
+#[tauri::command]
+pub fn read_asset(state: State<AppState>, name: String) -> CmdResult<tauri::ipc::Response> {
+    state.with(|w| {
+        let dir = w.path.join(ASSETS_DIR);
+        let path = dir.join(&name);
+        // Only files directly inside the assets folder.
+        if path.parent() != Some(dir.as_path()) {
+            return Err("Invalid asset name".into());
+        }
+        fs::read(path).map(tauri::ipc::Response::new).map_err(err)
+    })
+}

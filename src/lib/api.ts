@@ -24,6 +24,7 @@ export const api = {
   updateWorldInfo: (name: string, description: string) =>
     invoke<WorldInfo>("update_world_info", { name, description }),
   importAsset: (source: string) => invoke<string>("import_asset", { source }),
+  readAsset: (name: string) => invoke<ArrayBuffer>("read_asset", { name }),
 
   listTypes: () => invoke<EntryType[]>("list_types"),
   saveType: (entryType: EntryType) => invoke<void>("save_type", { entryType }),

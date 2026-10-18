@@ -25,6 +25,7 @@ pub fn run() {
             world::close_world,
             world::update_world_info,
             world::import_asset,
+            world::read_asset,
             codex::list_types,
             codex::save_type,
             codex::delete_type,

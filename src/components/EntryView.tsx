@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, ImagePlus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Copy, ImagePlus, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -11,6 +11,7 @@ import { MentionClickContext, RichEditor } from "./RichEditor";
 import { Select } from "./Select";
 import { assetUrl, EntryGlyph } from "./EntryIcon";
 import { EmojiPicker } from "./EmojiPicker";
+import { ShareCard } from "./ShareCard";
 import { openMenu, type MenuItem } from "./ContextMenu";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
 
@@ -64,6 +65,7 @@ export function EntryView({ id }: { id: string }) {
 function EntryEditor({ initial }: { initial: Entry }) {
   const [entry, setEntry] = useState(initial);
   const [pickingEmoji, setPickingEmoji] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const types = useStore((s) => s.types);
   const world = useStore((s) => s.world)!;
   const { go, patchEntry } = useStore.getState();
@@ -105,6 +107,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
   const menu: MenuItem[] = [
     { label: entry.image ? "Replace image…" : "Add image…", icon: <ImagePlus size={14} />, onClick: pickImage },
     ...(entry.image ? [{ label: "Remove image", onClick: () => update({ image: null }) }] : []),
+    { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
     "separator",
     {
@@ -134,6 +137,9 @@ function EntryEditor({ initial }: { initial: Entry }) {
             </span>
             <span className="entry-stamp">Edited {relativeTime(entry.updatedAt)}</span>
             <span className="spacer" />
+            <button className="ghost tiny" onClick={() => setSharing(true)} title="Make a shareable image of this entry">
+              Share
+            </button>
             <button className="icon-btn" onClick={(e) => openMenu(e, menu)} aria-label="More actions">
               <MoreHorizontal size={16} />
             </button>
@@ -211,6 +217,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
           </div>
         </aside>
       </article>
+      {sharing && <ShareCard entry={entry} onClose={() => setSharing(false)} />}
     </MentionClickContext.Provider>
   );
 }

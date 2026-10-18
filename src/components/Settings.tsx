@@ -6,12 +6,14 @@ import { useStore } from "../store";
 import { useUpdater } from "../lib/updater";
 import { ACCENTS, getAppearance, setAppearance, type AccentPreset } from "../lib/theme";
 import { Select } from "./Select";
+import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 
 export function Settings() {
   const world = useStore((s) => s.world)!;
   const { status, checkNow, install } = useUpdater();
   const [version, setVersion] = useState("");
   const [look, setLook] = useState(getAppearance);
+  const [author, setAuthor] = useState(getDefaultAuthor);
   const mode = document.documentElement.dataset.theme === "light" ? "light" : "dark";
   const isCustom = !(look.accent in ACCENTS);
   useEffect(() => {
@@ -58,6 +60,19 @@ export function Settings() {
             </label>
           </div>
         </div>
+      </section>
+
+      <section>
+        <h2>Writing</h2>
+        <div className="setting">
+          <span>Author name</span>
+          <input
+            value={author}
+            placeholder="Your name or pen name"
+            onChange={(e) => (setAuthor(e.target.value), setDefaultAuthor(e.target.value))}
+          />
+        </div>
+        <p className="hint">Used on exported books. Each book can override it in its export settings.</p>
       </section>
 
       <section>

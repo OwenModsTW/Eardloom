@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { useStore } from "../store";
 import { buildBook, EXTENSIONS, readingOrder, type BookFormat, type BookOptions } from "../lib/export/book";
 import type { DocSummary, Project } from "../lib/types";
+import { getDefaultAuthor } from "../lib/prefs";
 
 type Saved = Omit<BookOptions, "include" | "title"> & { title?: string };
 
@@ -17,7 +18,7 @@ export function ExportBook({ project, onClose }: { project: Project; onClose: ()
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [include, setInclude] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState(saved.title ?? project.title);
-  const [author, setAuthor] = useState(saved.author ?? "");
+  const [author, setAuthor] = useState(saved.author || getDefaultAuthor());
   const [format, setFormat] = useState<BookFormat>(saved.format ?? "epub");
   const [plainLinks, setPlainLinks] = useState(saved.plainLinks ?? true);
   const [folderHeadings, setFolderHeadings] = useState(saved.folderHeadings ?? false);
@@ -98,7 +99,7 @@ export function ExportBook({ project, onClose }: { project: Project; onClose: ()
             </label>
             <label className="field">
               <span>Author</span>
-              <input value={author} placeholder="Your name or pen name" onChange={(e) => setAuthor(e.target.value)} />
+              <input value={author} placeholder="Set a default in Settings" onChange={(e) => setAuthor(e.target.value)} />
             </label>
 
             <span className="field-label">Format</span>
