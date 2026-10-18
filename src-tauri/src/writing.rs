@@ -307,3 +307,129 @@ pub fn writing_overview(state: State<AppState>) -> CmdResult<WritingOverview> {
         Ok(WritingOverview { recent, totals })
     })
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotSummary {
+    pub id: String,
+    pub name: String,
+    pub automatic: bool,
+    pub word_count: i64,
+    pub created_at: String,
+}
+
+/// Automatic snapshots kept per document; named ones are never pruned.
+const KEEP_AUTOMATIC: i64 = 25;
+
+/// Saves the document's current text as a snapshot.
+#[tauri::command]
+pub fn create_snapshot(state: State<AppState>, id: String, doc_id: String, name: String, automatic: bool) -> CmdResult<()> {
+    state.with(|w| {
+        let tx = w.conn.unchecked_transaction().map_err(err)?;
+        tx.execute(
+            "INSERT INTO snapshots (id, doc_id, name, automatic, body, word_count)
+             SELECT ?1, id, ?3, ?4, body, word_count FROM docs WHERE id = ?2",
+            params![id, doc_id, name, automatic],
+        )
+        .map_err(err)?;
+        tx.execute(
+            "DELETE FROM snapshots WHERE doc_id = ?1 AND automatic = 1 AND id NOT IN (
+               SELECT id FROM snapshots WHERE doc_id = ?1 AND automatic = 1 ORDER BY created_at DESC LIMIT ?2)",
+            params![doc_id, KEEP_AUTOMATIC],
+        )
+        .map_err(err)?;
+        tx.commit().map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn list_snapshots(state: State<AppState>, doc_id: String) -> CmdResult<Vec<SnapshotSummary>> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT id, name, automatic, word_count, created_at FROM snapshots
+                  WHERE doc_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(err)?;
+        let rows = stmt
+            .query_map([&doc_id], |r| {
+                Ok(SnapshotSummary {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    automatic: r.get::<_, i64>(2)? != 0,
+                    word_count: r.get(3)?,
+                    created_at: r.get(4)?,
+                })
+            })
+            .map_err(err)?;
+        rows.collect::<Result<_, _>>().map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn get_snapshot_body(state: State<AppState>, id: String) -> CmdResult<Option<Value>> {
+    state.with(|w| {
+        let body: Option<String> = w
+            .conn
+            .query_row("SELECT body FROM snapshots WHERE id = ?1", [&id], |r| r.get(0))
+            .map_err(err)?;
+        Ok(body.and_then(|b| serde_json::from_str(&b).ok()))
+    })
+}
+
+#[tauri::command]
+pub fn rename_snapshot(state: State<AppState>, id: String, name: String) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute("UPDATE snapshots SET name = ?2, automatic = 0 WHERE id = ?1", params![id, name])
+            .map(|_| ())
+            .map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn delete_snapshot(state: State<AppState>, id: String) -> CmdResult<()> {
+    state.with(|w| w.conn.execute("DELETE FROM snapshots WHERE id = ?1", [&id]).map(|_| ()).map_err(err))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::db;
+    use rusqlite::params;
+
+    #[test]
+    fn snapshots_follow_their_document_and_prune_automatic_ones() {
+        let path = std::env::temp_dir().join(format!("eardloom-snap-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let conn = db::open(&path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO projects (id, title) VALUES ('p', 'Book');
+             INSERT INTO docs (id, project_id, title, body, word_count) VALUES ('d', 'p', 'Ch 1', '{\"type\":\"doc\"}', 3);",
+        )
+        .unwrap();
+        for i in 0..30 {
+            conn.execute(
+                "INSERT INTO snapshots (id, doc_id, automatic, created_at) VALUES (?1, 'd', 1, ?2)",
+                params![format!("a{i}"), format!("2026-01-01 00:00:{i:02}")],
+            )
+            .unwrap();
+        }
+        conn.execute("INSERT INTO snapshots (id, doc_id, name) VALUES ('named', 'd', 'Draft 1')", []).unwrap();
+        // Same pruning statement as create_snapshot.
+        conn.execute(
+            "DELETE FROM snapshots WHERE doc_id = ?1 AND automatic = 1 AND id NOT IN (
+               SELECT id FROM snapshots WHERE doc_id = ?1 AND automatic = 1 ORDER BY created_at DESC LIMIT ?2)",
+            params!["d", super::KEEP_AUTOMATIC],
+        )
+        .unwrap();
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM snapshots WHERE automatic = 1"), super::KEEP_AUTOMATIC);
+        assert_eq!(count("SELECT COUNT(*) FROM snapshots WHERE id = 'a0'"), 0, "oldest automatic pruned");
+        assert_eq!(count("SELECT COUNT(*) FROM snapshots WHERE id = 'named'"), 1, "named kept");
+        conn.execute("DELETE FROM docs WHERE id = 'd'", []).unwrap();
+        assert_eq!(count("SELECT COUNT(*) FROM snapshots"), 0, "deleted with their document");
+        drop(conn);
+        let _ = std::fs::remove_file(path);
+    }
+}

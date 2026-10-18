@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { JSONContent } from "@tiptap/react";
 import type {
   Backlink,
   Calendar,
@@ -48,6 +49,13 @@ export const api = {
   moveDocs: (positions: { id: string; parentId: string | null; sort: number }[]) =>
     invoke<void>("move_docs", { positions }),
   deleteDoc: (id: string) => invoke<void>("delete_doc", { id }),
+  createSnapshot: (docId: string, name: string, automatic = false) =>
+    invoke<void>("create_snapshot", { id: crypto.randomUUID(), docId, name, automatic }),
+  listSnapshots: (docId: string) =>
+    invoke<{ id: string; name: string; automatic: boolean; wordCount: number; createdAt: string }[]>("list_snapshots", { docId }),
+  getSnapshotBody: (id: string) => invoke<JSONContent | null>("get_snapshot_body", { id }),
+  renameSnapshot: (id: string, name: string) => invoke<void>("rename_snapshot", { id, name }),
+  deleteSnapshot: (id: string) => invoke<void>("delete_snapshot", { id }),
 
   getWorldSetting: (key: "cover" | "pinned") => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: "cover" | "pinned", value: string | null) => invoke<void>("set_world_setting", { key, value }),

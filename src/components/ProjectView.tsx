@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  Maximize2, Minimize2, PanelRightOpen, Search, Trash2,
+  History, Maximize2, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
@@ -12,6 +12,7 @@ import { toParagraphs } from "../lib/text";
 import { MentionClickContext, RichEditor, type EditorStats } from "./RichEditor";
 import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
+import { SnapshotPanel } from "./Snapshots";
 import { assetUrl } from "./EntryView";
 import { EntryGlyph } from "./EntryIcon";
 import type { Doc, DocSummary, Entry, FieldValue, Project, WorldDate } from "../lib/types";
@@ -35,6 +36,9 @@ type Drop = { targetId: string; where: "before" | "after" | "inside" };
 
 /** Each book's word total when it was first opened this session, for "+N this session". */
 const sessionStarts = new Map<string, number>();
+
+/** Documents already given an automatic snapshot this session. */
+const autoSnapped = new Set<string>();
 
 /** Click to set a word target; shows progress once one is set. */
 function TargetMeter({ words, target, onChange, label }: { words: number; target?: number; onChange: (n: number | undefined) => void; label: string }) {
@@ -84,6 +88,9 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [editorRev, setEditorRev] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [snapsOpen, setSnapsOpen] = useState(false);
+  const [snapVersion, setSnapVersion] = useState(0);
+  const flushDoc = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const reload = useCallback(() => api.listDocs(id).then(setDocs), [id]);
   useEffect(() => {
@@ -92,6 +99,8 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
 
   const tree = useMemo(() => buildTree(docs), [docs]);
   const activeId = docId ?? docs.find((d) => d.kind === "text")?.id;
+  const activeRef = useRef(activeId);
+  activeRef.current = activeId;
   const total = docs.reduce((n, d) => n + d.wordCount, 0);
   useEffect(() => {
     if (docs.length && !sessionStarts.has(id)) sessionStarts.set(id, total);
@@ -102,6 +111,14 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "F11") (e.preventDefault(), setFocusMode(!useStore.getState().focusMode));
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        const docId = activeRef.current;
+        if (docId)
+          flushDoc.current()
+            .then(() => api.createSnapshot(docId, ""))
+            .then(() => (setSnapVersion((v) => v + 1), useStore.getState().notify("Snapshot saved")));
+      }
       if (e.key === "Escape" && useStore.getState().focusMode && !document.querySelector(".find-bar, .overlay, .menu")) setFocusMode(false);
     };
     window.addEventListener("keydown", key);
@@ -262,7 +279,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   };
 
   return (
-    <div className={`project ${loreOpen && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
+    <div className={`project ${(loreOpen || snapsOpen) && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
       <aside className="binder">
         <ProjectTitle project={project} onSaved={refreshProjects} />
         <div className="binder-actions">
@@ -287,14 +304,23 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
         </div>
       </aside>
 
-      <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true))}>
+      <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true), setSnapsOpen(false))}>
         <main className="manuscript">
           <div className="manuscript-tools">
             <button className="icon-btn" onClick={() => setFocusMode(!focusMode)} title={focusMode ? "Leave focus mode (Esc)" : "Focus mode (F11)"}>
               {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
             </button>
             {!focusMode && (
-              <button className="icon-btn" onClick={() => setLoreOpen(!loreOpen)} title="Toggle lore panel">
+              <button
+                className={`icon-btn ${snapsOpen ? "on" : ""}`}
+                onClick={() => (setSnapsOpen(!snapsOpen), setLoreOpen(false))}
+                title="Snapshots (Ctrl+S to take one)"
+              >
+                <History size={15} />
+              </button>
+            )}
+            {!focusMode && (
+              <button className="icon-btn" onClick={() => (setLoreOpen(!loreOpen), setSnapsOpen(false))} title="Toggle lore panel">
                 {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
               </button>
             )}
@@ -304,6 +330,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               key={`${activeId}-${editorRev}`}
               id={activeId}
               target={settings.targets?.[activeId]}
+              registerFlush={(f) => (flushDoc.current = f)}
               onTarget={(n) => setDocTarget(activeId, n)}
               onSaved={(patch) => setDocs((ds) => ds.map((d) => (d.id === patch.id ? { ...d, ...patch } : d)))}
             />
@@ -318,6 +345,14 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </MentionClickContext.Provider>
 
       {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
+      {snapsOpen && !focusMode && activeId && (
+        <SnapshotPanel
+          docId={activeId}
+          version={snapVersion}
+          flush={() => flushDoc.current()}
+          onRestored={() => (setEditorRev((r) => r + 1), reload())}
+        />
+      )}
       {exporting && <ExportBook project={project} onClose={() => setExporting(false)} />}
     </div>
   );
@@ -347,11 +382,13 @@ function DocEditor({
   id,
   target,
   onTarget,
+  registerFlush,
   onSaved,
 }: {
   id: string;
   target?: number;
   onTarget: (n: number | undefined) => void;
+  registerFlush: (flush: () => Promise<void>) => void;
   onSaved: (patch: Partial<DocSummary> & { id: string }) => void;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
@@ -360,18 +397,25 @@ function DocEditor({
     api.getDoc(id).then((d) => (setDoc(d), setStats((s) => ({ ...s, words: d.wordCount }))));
   }, [id]);
 
-  const { schedule } = useAutosave(async (d: Doc) => {
+  const { schedule, flush } = useAutosave(async (d: Doc) => {
     const wordCount = await api.saveDoc(d);
     onSaved({ id: d.id, title: d.title, synopsis: d.synopsis, status: d.status, wordCount });
   });
+  useEffect(() => registerFlush(flush), [flush]);
 
   if (!doc) return null;
-  const update = (patch: Partial<Doc>) =>
+  const update = (patch: Partial<Doc>) => {
+    // Keep the version from before this session's first edit, as a safety net.
+    if (patch.body && !autoSnapped.has(id)) {
+      autoSnapped.add(id);
+      if (doc.wordCount > 0) api.createSnapshot(id, "", true).catch(() => {});
+    }
     setDoc((prev) => {
       const next = { ...prev!, ...patch };
       schedule(next);
       return next;
     });
+  };
 
   return (
     <div className="doc">

@@ -88,6 +88,19 @@ const MIGRATIONS: &[&str] = &[
     "#,
     // v2: an emoji that stands in for an entry when it has no image
     "ALTER TABLE entries ADD COLUMN emoji TEXT;",
+    // v3: saved versions of manuscript documents
+    r#"
+    CREATE TABLE snapshots (
+        id         TEXT PRIMARY KEY,
+        doc_id     TEXT NOT NULL REFERENCES docs(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL DEFAULT '',
+        automatic  INTEGER NOT NULL DEFAULT 0,
+        body       TEXT,
+        word_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    );
+    CREATE INDEX snapshots_by_doc ON snapshots(doc_id, created_at);
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

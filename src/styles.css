@@ -826,3 +826,26 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .project.focus .format-bar { opacity: 0; transition: opacity 0.25s; }
 .project.focus .format-bar:hover, .project.focus .format-bar:focus-within { opacity: 1; }
 .project.focus .doc-title, .project.focus .doc-synopsis { opacity: 0.5; }
+
+/* ---------- snapshots & compare ---------- */
+.side-title { font: 600 16px var(--serif); color: var(--text); margin: 2px 0 10px; }
+.snap-take { display: flex; gap: 6px; }
+.snap-take input { height: 28px; }
+.snap-take .primary { height: 28px; }
+.snap-list { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid var(--line); }
+.snap-list li { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
+.snap-list li:hover { background: var(--bg-hover); }
+.snap-list li input { margin: 4px 0; height: 26px; }
+.snap-main { flex: 1; display: flex; flex-direction: column; padding: 6px 6px; min-width: 0; }
+.snap-main strong { font-weight: 600; font-size: 14px; }
+.snap-main strong.auto { font-weight: 400; color: var(--text-soft); font-style: italic; }
+.snap-main small { color: var(--muted); font-size: 12px; }
+.manuscript-tools .icon-btn.on { color: var(--accent); background: var(--bg-active); }
+.dialog.compare { width: min(860px, 94vw); }
+.compare-body { padding: 16px 24px; overflow-y: auto; max-height: 64vh; font: 16px/1.7 var(--serif); }
+.compare-body p { margin: 0 0 0.8em; }
+.cmp-same { color: var(--muted); }
+.cmp-add, .compare-body ins, .dialog-foot ins { background: color-mix(in srgb, var(--teal) 28%, transparent); text-decoration: none; border-radius: 2px; }
+.cmp-del, .compare-body del, .dialog-foot del { background: color-mix(in srgb, var(--danger) 22%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); border-radius: 2px; }
+.inline-check { padding: 0; align-items: center; }
+.inline-check input { margin: 0; }

@@ -10,13 +10,16 @@ export function useAutosave<T>(save: (value: T) => Promise<unknown>, delay = 600
   const saveRef = useRef(save);
   saveRef.current = save;
 
-  const flush = useCallback(() => {
+  /** Saves anything pending now. Resolves once it's written. */
+  const flush = useCallback((): Promise<void> => {
     window.clearTimeout(timer.current);
-    if (pending.current !== null) {
-      const value = pending.current;
-      pending.current = null;
-      saveRef.current(value).catch((e) => console.error("Save failed", e));
-    }
+    if (pending.current === null) return Promise.resolve();
+    const value = pending.current;
+    pending.current = null;
+    return saveRef.current(value).then(
+      () => undefined,
+      (e) => console.error("Save failed", e),
+    );
   }, []);
 
   const schedule = useCallback(
@@ -29,10 +32,11 @@ export function useAutosave<T>(save: (value: T) => Promise<unknown>, delay = 600
   );
 
   useEffect(() => {
-    window.addEventListener("beforeunload", flush);
+    const onUnload = () => void flush();
+    window.addEventListener("beforeunload", onUnload);
     return () => {
-      window.removeEventListener("beforeunload", flush);
-      flush();
+      window.removeEventListener("beforeunload", onUnload);
+      void flush();
     };
   }, [flush]);
 
