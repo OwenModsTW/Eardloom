@@ -6,6 +6,7 @@ import { useStore } from "../store";
 import { useUpdater } from "../lib/updater";
 import { ACCENTS, getAppearance, setAppearance, type AccentPreset } from "../lib/theme";
 import { Select } from "./Select";
+import { showWhatsNew } from "./WhatsNew";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 
 export function Settings() {
@@ -93,6 +94,9 @@ export function Settings() {
         <h2>Updates</h2>
         <p>Eardloom {version}</p>
         <div className="row">
+          <button className="ghost" onClick={() => showWhatsNew()}>
+            What's new
+          </button>
           <button className="ghost" disabled={status.state === "checking"} onClick={() => checkNow()}>
             <RefreshCw size={14} /> Check for updates
           </button>

@@ -2,6 +2,14 @@
 
 The first line under each version is shown in Eardloom's update banner.
 
+## 0.1.2
+
+Updates now announce themselves, and you can see what changed.
+
+- When a new version is out, Eardloom tells you as soon as it opens, with the release notes and a one-click update. Choose Later and a reminder stays at the top of the window.
+- After updating, a **What's new** window shows everything that changed since your last version. You can reopen it from Settings.
+- Eardloom also checks for updates every few hours while it's open.
+
 ## 0.1.1
 
 Export your books, share entries as images, and give entries an icon.
