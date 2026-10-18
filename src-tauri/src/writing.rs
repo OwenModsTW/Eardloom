@@ -433,3 +433,22 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 }
+
+/// The clipboard's RTF, if any. Some apps (Scrivener among them) copy only RTF and
+/// plain text, which the webview can't read, so formatting would otherwise be lost.
+#[tauri::command]
+pub fn clipboard_rtf() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use clipboard_win::{formats, get_clipboard, raw::register_format};
+        let format = register_format("Rich Text Format")?;
+        let bytes: Vec<u8> = get_clipboard(formats::RawData(format.get())).ok()?;
+        // RTF escapes anything outside ASCII, so a lossy decode is exact; drop the trailing NUL.
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        (end > 0).then(|| String::from_utf8_lossy(&bytes[..end]).into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}

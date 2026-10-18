@@ -2,6 +2,13 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.5
+
+Snapshots of your chapters, and pasting from Scrivener keeps its formatting.
+
+- **Snapshots**: save a version of any chapter (Ctrl+S, or the history button above the page), compare it word by word with what you have now, and restore it if you change your mind. Eardloom also keeps a snapshot automatically the first time you edit a chapter in each session.
+- **Pasting from Scrivener** (and other apps that copy rich text) now keeps italics, bold, underline, strikethrough, superscript, alignment and headings, instead of pasting plain text.
+
 ## 0.1.4
 
 A much more capable writing editor.

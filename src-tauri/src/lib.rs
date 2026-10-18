@@ -54,6 +54,7 @@ pub fn run() {
             writing::get_snapshot_body,
             writing::rename_snapshot,
             writing::delete_snapshot,
+            writing::clipboard_rtf,
             share::export_world_pack,
             share::import_world_pack,
             share::write_static_site,

@@ -56,6 +56,7 @@ export const api = {
   getSnapshotBody: (id: string) => invoke<JSONContent | null>("get_snapshot_body", { id }),
   renameSnapshot: (id: string, name: string) => invoke<void>("rename_snapshot", { id, name }),
   deleteSnapshot: (id: string) => invoke<void>("delete_snapshot", { id }),
+  clipboardRtf: () => invoke<string | null>("clipboard_rtf"),
 
   getWorldSetting: (key: "cover" | "pinned") => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: "cover" | "pinned", value: string | null) => invoke<void>("set_world_setting", { key, value }),

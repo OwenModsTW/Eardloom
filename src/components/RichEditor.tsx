@@ -26,6 +26,9 @@ import { createEntry } from "../lib/actions";
 import { FormatBar } from "./FormatBar";
 import { FindBar } from "./FindBar";
 import { Search } from "../lib/editor/search";
+import { rtfToContent } from "../lib/editor/rtf";
+import { Slice } from "@tiptap/pm/model";
+import { api } from "../lib/api";
 import { getManuscriptLook } from "../lib/prefs";
 import type { EntrySummary } from "../lib/types";
 
@@ -273,7 +276,28 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
             Focus.configure({ className: "has-focus", mode: "shallowest" }),
           ]),
     ],
-    editorProps: { attributes: { spellcheck: "true" } },
+    editorProps: {
+      attributes: { spellcheck: "true" },
+      // Scrivener (and some other apps) copy formatted text only as RTF, which the
+      // webview ignores. Read the RTF ourselves so italics etc. survive the paste.
+      handlePaste: (view, event) => {
+        const types = Array.from(event.clipboardData?.types ?? []);
+        if (types.includes("text/html") || types.includes("Files")) return false;
+        const plain = event.clipboardData?.getData("text/plain") ?? "";
+        event.preventDefault();
+        api
+          .clipboardRtf()
+          .then((rtf) => {
+            const content = rtf ? rtfToContent(rtf) : [];
+            if (!content.length) return void view.pasteText(plain);
+            const doc = view.state.schema.nodeFromJSON({ type: "doc", content });
+            // Open on both sides, so a one-paragraph paste flows into the current line.
+            view.dispatch(view.state.tr.replaceSelection(new Slice(doc.content, 1, 1)).scrollIntoView());
+          })
+          .catch(() => view.pasteText(plain));
+        return true;
+      },
+    },
     content: content ?? undefined,
     autofocus: autofocus ? "end" : false,
     onCreate: ({ editor }) => report(editor),

@@ -1,6 +1,6 @@
 [package]
 name = "eardloom"
-version = "0.1.4"
+version = "0.1.5"
 description = "Eardloom — worldbuilding and writing"
 authors = ["you"]
 edition = "2024"
@@ -39,3 +39,6 @@ strip = true
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+
+[target."cfg(windows)".dependencies]
+clipboard-win = "5.4.1"
