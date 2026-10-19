@@ -23,6 +23,18 @@ A worldbuilding and writing tool for people crafting their own worlds, whether f
 - **Your files, on your disk.** A world is a folder (`world.db` + `assets/`). Back it up or move it like any other folder.
 - **Updates itself.** New versions are published to GitHub Releases and installed from inside the app.
 
+## Privacy
+
+- Your worlds and writing stay on your computer. Eardloom doesn't collect or send them anywhere.
+- Eardloom checks GitHub Releases for updates (an ordinary download request).
+- The optional built-in assistant runs entirely on your computer. When you turn it on, its engine
+  ([llama.cpp](https://github.com/ggml-org/llama.cpp), MIT) and model ([Qwen3](https://huggingface.co/Qwen), Apache 2.0)
+  are downloaded once from GitHub and Hugging Face and checked against their published checksums. After that it works
+  offline and conversations never leave your computer.
+- If you connect another AI app (Claude, Codex), that app's own terms and privacy policy apply.
+
+Open-source licences for everything Eardloom is built with are in the app under *Settings → About*.
+
 ## Download
 
 Grab the latest Windows installer from [Releases](https://github.com/OwenModsTW/Eardloom/releases/latest). Once installed, Eardloom keeps itself up to date.

@@ -10,6 +10,7 @@ import { showWhatsNew } from "./WhatsNew";
 import { BackupSettings } from "./BackupSettings";
 import { AiSettings } from "./AiSettings";
 import { LocalAiSettings } from "./LocalAiSettings";
+import { About } from "./About";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 import { getSpellLang, setSpellLang, type SpellLang } from "../lib/spell";
 
@@ -156,6 +157,8 @@ export function Settings() {
           {status.state === "error" && <span className="error-text">Couldn't check: {status.message}</span>}
         </div>
       </section>
+
+      <About />
     </div>
   );
 }

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/gen-licenses.mjs && tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "licenses": "node scripts/gen-licenses.mjs"
   },
   "dependencies": {
     "@fontsource-variable/literata": "^5.3.0",

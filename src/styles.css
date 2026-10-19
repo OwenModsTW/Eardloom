@@ -1078,3 +1078,18 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .badge { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 8px; background: var(--teal); color: #fff; }
 .download { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-soft); }
 .download .progress { flex: 1; }
+
+/* ---------- about & licences ---------- */
+.about-sub { font: 600 14px var(--ui); color: var(--text-soft); margin: 12px 0 4px; }
+.privacy { margin: 0 0 12px; padding-left: 18px; color: var(--text-soft); font-size: 13.5px; }
+.privacy li { margin-bottom: 4px; }
+.dialog.licences { width: min(760px, 94vw); height: 80vh; }
+.licences-body { padding: 12px 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.licence-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.licence-list li { border-bottom: 1px solid var(--line); }
+.licence-row { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 6px 2px; text-align: left; }
+.licence-row:hover { background: var(--bg-hover); }
+.licence-row small { color: var(--muted); font-size: 12px; margin-left: auto; text-align: right; }
+.licence-text { padding: 4px 4px 10px; }
+.licence-text pre { white-space: pre-wrap; font: 11.5px/1.45 Consolas, monospace; color: var(--text-soft); background: var(--bg-input); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; max-height: 320px; overflow-y: auto; }
+.mono { font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
