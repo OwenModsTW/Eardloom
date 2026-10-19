@@ -706,9 +706,30 @@ pub fn connector_status() -> CmdResult<ConnectorStatus> {
     })
 }
 
+/// Whether the Claude Desktop app is open (Windows only; elsewhere assume not).
+fn claude_desktop_running() -> bool {
+    #[cfg(windows)]
+    {
+        // Claude Code is also named claude.exe, so look at where each process runs from:
+        // the desktop app lives in WindowsApps (Store install) or AnthropicClaude.
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args(["-NoProfile", "-Command", "Get-Process claude -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }"]);
+        hide_window(&mut cmd);
+        if let Ok(out) = cmd.output() {
+            let paths = String::from_utf8_lossy(&out.stdout).to_lowercase();
+            return paths.lines().any(|p| p.contains(r"\windowsapps\claude_") || p.contains(r"\anthropicclaude\"));
+        }
+    }
+    false
+}
+
 /// Adds Eardloom to Claude Desktop's list of local tools (keeping a backup of the file).
 #[tauri::command]
 pub fn connect_claude_desktop(connect: bool) -> CmdResult<()> {
+    // Claude Desktop saves over this file while it's running, which would undo the change.
+    if claude_desktop_running() {
+        return Err("Quit Claude Desktop first (right-click its icon by the clock and choose Quit), then click Connect again.".into());
+    }
     let path = claude_desktop_config().ok_or("Couldn't find Claude Desktop's settings folder.")?;
     let existing = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
     let mut config: Value = serde_json::from_str(&existing).map_err(|_| "Claude Desktop's settings file isn't valid JSON, so it was left alone.")?;
