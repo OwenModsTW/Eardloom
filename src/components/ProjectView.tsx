@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  History, Maximize2, Minimize2, PanelRightOpen, Search, Trash2,
+  History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
@@ -14,6 +14,8 @@ import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import { SnapshotPanel } from "./Snapshots";
 import { CardsView, OutlineView, PlanSettingsPanel } from "./Planning";
+import { CommentsPanel } from "./Comments";
+import { useActiveEditor } from "../lib/editor/comment";
 import { planOf } from "../lib/plan";
 import { assetUrl } from "./EntryView";
 import { EntryGlyph } from "./EntryIcon";
@@ -110,10 +112,21 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [editorRev, setEditorRev] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [snapsOpen, setSnapsOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentVersion, setCommentVersion] = useState(0);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const focusedComment = useActiveEditor((s) => s.focusedComment);
   const [snapVersion, setSnapVersion] = useState(0);
   const flushDoc = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const reload = useCallback(() => api.listDocs(id).then(setDocs), [id]);
+  const reloadCounts = useCallback(() => api.commentCounts(id).then(setCommentCounts), [id]);
+  useEffect(() => {
+    reloadCounts();
+  }, [reloadCounts, commentVersion]);
+  useEffect(() => {
+    if (focusedComment) (setCommentsOpen(true), setLoreOpen(false), setSnapsOpen(false));
+  }, [focusedComment]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -128,10 +141,34 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   }, [docs.length, id, total]);
   const session = total - (sessionStarts.get(id) ?? total);
 
+  useEffect(() => {
+    const addComment = async () => {
+      const editor = useActiveEditor.getState().editor;
+      const docId = activeRef.current;
+      if (!editor || !docId) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) return useStore.getState().notify("Select the text you want to comment on first.");
+      const commentId = newId();
+      editor.chain().focus().setMark("comment", { id: commentId }).run();
+      await api.saveComment({ id: commentId, docId, body: "", resolved: false });
+      setCommentsOpen(true);
+      setLoreOpen(false);
+      setSnapsOpen(false);
+      setCommentVersion((v) => v + 1);
+      useActiveEditor.setState({ focusedComment: commentId });
+    };
+    window.addEventListener("eardloom:comment", addComment);
+    return () => window.removeEventListener("eardloom:comment", addComment);
+  }, []);
+
   // F11 toggles focus mode; Escape leaves it.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "F11") (e.preventDefault(), setFocusMode(!useStore.getState().focusMode));
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("eardloom:comment"));
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         const docId = activeRef.current;
@@ -306,6 +343,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               {n.title || "Untitled"}
             </span>
           )}
+          {commentCounts[n.id] ? <span className="binder-comments" title="Unresolved comments">{commentCounts[n.id]}</span> : null}
           {n.label && <i className="binder-label" style={{ background: plan.labels.find((l) => l.id === n.label)?.color }} />}
           {!isFolder && n.wordCount > 0 && <small>{n.wordCount.toLocaleString()}</small>}
         </div>
@@ -315,7 +353,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   };
 
   return (
-    <div className={`project ${(loreOpen || snapsOpen) && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
+    <div className={`project ${(loreOpen || snapsOpen || commentsOpen) && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
       <aside className="binder">
         <ProjectTitle project={project} onSaved={refreshProjects} />
         <div className="binder-actions">
@@ -340,7 +378,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
         </div>
       </aside>
 
-      <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true), setSnapsOpen(false))}>
+      <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true), setSnapsOpen(false), setCommentsOpen(false))}>
         <main className={`manuscript mode-${mode}`}>
           {!focusMode && (
             <div className="mode-bar">
@@ -364,15 +402,25 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             </button>
             {!focusMode && (
               <button
+                className={`icon-btn ${commentsOpen ? "on" : ""}`}
+                onClick={() => (setCommentsOpen(!commentsOpen), setLoreOpen(false), setSnapsOpen(false))}
+                title="Comments"
+              >
+                <MessageSquare size={15} />
+                {activeId && commentCounts[activeId] ? <span className="tool-badge">{commentCounts[activeId]}</span> : null}
+              </button>
+            )}
+            {!focusMode && (
+              <button
                 className={`icon-btn ${snapsOpen ? "on" : ""}`}
-                onClick={() => (setSnapsOpen(!snapsOpen), setLoreOpen(false))}
+                onClick={() => (setSnapsOpen(!snapsOpen), setLoreOpen(false), setCommentsOpen(false))}
                 title="Snapshots (Ctrl+S to take one)"
               >
                 <History size={15} />
               </button>
             )}
             {!focusMode && (
-              <button className="icon-btn" onClick={() => (setLoreOpen(!loreOpen), setSnapsOpen(false))} title="Toggle lore panel">
+              <button className="icon-btn" onClick={() => (setLoreOpen(!loreOpen), setSnapsOpen(false), setCommentsOpen(false))} title="Toggle lore panel">
                 {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
               </button>
             )}
@@ -401,6 +449,9 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </MentionClickContext.Provider>
 
       {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
+      {commentsOpen && !focusMode && activeId && mode === "write" && (
+        <CommentsPanel docId={activeId} version={commentVersion} onChanged={() => setCommentVersion((v) => v + 1)} />
+      )}
       {planSettings && <PlanSettingsPanel project={project} onClose={() => setPlanSettings(false)} />}
       {snapsOpen && !focusMode && activeId && (
         <SnapshotPanel

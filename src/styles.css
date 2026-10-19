@@ -931,3 +931,17 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .plan-row input { height: 28px; }
 .plan-row input[type="color"] { width: 30px; padding: 0; border: 0; background: none; flex-shrink: 0; }
 .plan-settings-body .ghost { margin-top: 4px; }
+
+/* ---------- comments ---------- */
+.comment-mark { background: color-mix(in srgb, var(--accent) 16%, transparent); border-bottom: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); cursor: pointer; }
+.comment-list { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.comment-list li { background: var(--bg-raised); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r); padding: 8px; cursor: pointer; }
+.comment-list li.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.comment-list li.resolved { opacity: 0.6; border-left-color: var(--line-strong); }
+.comment-list blockquote { margin: 0 0 6px; font: italic 13.5px/1.45 var(--serif); color: var(--text-soft); }
+.comment-list textarea { min-height: 54px; font-size: 13.5px; field-sizing: content; }
+.comment-list footer { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.comment-list footer small { color: var(--faint); font-size: 12px; }
+.manuscript-tools .icon-btn { position: relative; }
+.tool-badge { position: absolute; top: -3px; right: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.binder-comments { font-size: 10.5px; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 7px; padding: 0 5px; line-height: 14px; }

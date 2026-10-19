@@ -486,3 +486,72 @@ pub fn update_doc_details(state: State<AppState>, id: String, details: DocDetail
             .map_err(err)
     })
 }
+
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Comment {
+    pub id: String,
+    pub doc_id: String,
+    pub body: String,
+    pub resolved: bool,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[tauri::command]
+pub fn list_comments(state: State<AppState>, doc_id: String) -> CmdResult<Vec<Comment>> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare("SELECT id, doc_id, body, resolved, created_at FROM comments WHERE doc_id = ?1 ORDER BY created_at")
+            .map_err(err)?;
+        let rows = stmt
+            .query_map([&doc_id], |r| {
+                Ok(Comment {
+                    id: r.get(0)?,
+                    doc_id: r.get(1)?,
+                    body: r.get(2)?,
+                    resolved: r.get::<_, i64>(3)? != 0,
+                    created_at: r.get(4)?,
+                })
+            })
+            .map_err(err)?;
+        rows.collect::<Result<_, _>>().map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn save_comment(state: State<AppState>, comment: Comment) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute(
+                "INSERT INTO comments (id, doc_id, body, resolved) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(id) DO UPDATE SET body = excluded.body, resolved = excluded.resolved",
+                params![comment.id, comment.doc_id, comment.body, comment.resolved],
+            )
+            .map(|_| ())
+            .map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn delete_comment(state: State<AppState>, id: String) -> CmdResult<()> {
+    state.with(|w| w.conn.execute("DELETE FROM comments WHERE id = ?1", [&id]).map(|_| ()).map_err(err))
+}
+
+/// Comment counts per document, for badges in the binder.
+#[tauri::command]
+pub fn comment_counts(state: State<AppState>, project_id: String) -> CmdResult<std::collections::HashMap<String, i64>> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT c.doc_id, COUNT(*) FROM comments c JOIN docs d ON d.id = c.doc_id
+                  WHERE d.project_id = ?1 AND c.resolved = 0 GROUP BY c.doc_id",
+            )
+            .map_err(err)?;
+        let rows = stmt.query_map([&project_id], |r| Ok((r.get(0)?, r.get(1)?))).map_err(err)?;
+        rows.collect::<Result<_, _>>().map_err(err)
+    })
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Bold, Highlighter, IndentDecrease, IndentIncrease,
-  Italic, Link2, List, ListOrdered, Minus, MoreHorizontal, Quote, Redo2, RemoveFormatting, Search, Strikethrough,
+  Italic, Link2, List, ListOrdered, MessageSquarePlus, Minus, MoreHorizontal, Quote, Redo2, RemoveFormatting, Search, Strikethrough,
   Subscript, Superscript, Type, Underline, Undo2,
 } from "lucide-react";
 import { Select } from "./Select";
@@ -231,6 +231,7 @@ export function FormatBar({ editor, manuscript, onFind }: { editor: Editor; manu
         <MoreHorizontal size={15} />,
       )}
       <span className="spacer" />
+      {manuscript && btn(false, "Comment on selection (Ctrl+Alt+M)", () => window.dispatchEvent(new CustomEvent("eardloom:comment")), <MessageSquarePlus size={15} />)}
       {btn(false, "Find and replace (Ctrl+F)", onFind, <Search size={15} />)}
       {manuscript && btn(false, "Page appearance", open("look"), <Type size={15} />)}
       {btn(false, "Undo (Ctrl+Z)", () => chain().undo().run(), <Undo2 size={15} />, !s.canUndo)}

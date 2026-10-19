@@ -59,6 +59,12 @@ export const api = {
   renameSnapshot: (id: string, name: string) => invoke<void>("rename_snapshot", { id, name }),
   deleteSnapshot: (id: string) => invoke<void>("delete_snapshot", { id }),
   clipboardRtf: () => invoke<string | null>("clipboard_rtf"),
+  listComments: (docId: string) =>
+    invoke<{ id: string; docId: string; body: string; resolved: boolean; createdAt: string }[]>("list_comments", { docId }),
+  saveComment: (comment: { id: string; docId: string; body: string; resolved: boolean; createdAt?: string }) =>
+    invoke<void>("save_comment", { comment: { createdAt: "", ...comment } }),
+  deleteComment: (id: string) => invoke<void>("delete_comment", { id }),
+  commentCounts: (projectId: string) => invoke<Record<string, number>>("comment_counts", { projectId }),
 
   getWorldSetting: (key: "cover" | "pinned" | "dictionary") => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: "cover" | "pinned" | "dictionary", value: string | null) => invoke<void>("set_world_setting", { key, value }),

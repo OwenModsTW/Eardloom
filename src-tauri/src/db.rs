@@ -103,6 +103,17 @@ const MIGRATIONS: &[&str] = &[
     "#,
     // v4: a colour label per manuscript document (e.g. POV, storyline)
     "ALTER TABLE docs ADD COLUMN label TEXT NOT NULL DEFAULT '';",
+    // v5: comments on manuscript text (the anchor lives in the text as a mark)
+    r#"
+    CREATE TABLE comments (
+        id         TEXT PRIMARY KEY,
+        doc_id     TEXT NOT NULL REFERENCES docs(id) ON DELETE CASCADE,
+        body       TEXT NOT NULL DEFAULT '',
+        resolved   INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    );
+    CREATE INDEX comments_by_doc ON comments(doc_id);
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

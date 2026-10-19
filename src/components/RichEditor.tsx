@@ -27,6 +27,7 @@ import { FormatBar } from "./FormatBar";
 import { FindBar } from "./FindBar";
 import { Search } from "../lib/editor/search";
 import { Spellcheck } from "../lib/editor/spellcheck";
+import { CommentMark, useActiveEditor } from "../lib/editor/comment";
 import { ignoreWord, suggestions } from "../lib/spell";
 import { openMenuAt } from "./ContextMenu";
 import { rtfToContent } from "../lib/editor/rtf";
@@ -277,6 +278,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
             Superscript,
             Typography,
             Search,
+            CommentMark,
             Focus.configure({ className: "has-focus", mode: "shallowest" }),
           ]),
     ],
@@ -305,7 +307,13 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
     },
     content: content ?? undefined,
     autofocus: autofocus ? "end" : false,
-    onCreate: ({ editor }) => report(editor),
+    onCreate: ({ editor }) => {
+      report(editor);
+      if (manuscript) useActiveEditor.setState({ editor });
+    },
+    onDestroy: () => {
+      if (manuscript) useActiveEditor.setState({ editor: null, focusedComment: null });
+    },
     onUpdate: ({ editor }) => {
       onChangeRef.current(editor.getJSON(), editor.storage.characterCount.words(), editor.isEmpty);
       report(editor);
@@ -342,6 +350,10 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
       editor={editor}
       className={`rich ${compact ? "compact" : ""} ${className ?? ""}`}
       onContextMenu={spellMenu}
+      onClick={(e) => {
+        const c = (e.target as HTMLElement).closest("[data-comment]") as HTMLElement | null;
+        if (c && manuscript) useActiveEditor.setState({ focusedComment: c.dataset.comment ?? null });
+      }}
     />
   );
   if (compact || !editor) return body;
