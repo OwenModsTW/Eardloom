@@ -76,33 +76,92 @@ function ringNoise(rand: () => number, octaves: number) {
 }
 
 /**
- * A random landmass outline: a wobbly ring, roughened at several scales so the
- * coast has bays and headlands.
+ * Fractal coastline: repeatedly push each edge's midpoint sideways by a random
+ * amount proportional to its length, giving bays within bays like a real coast.
+ */
+function roughen(points: Pt[], rand: () => number, iterations: number, strength: number): Pt[] {
+  let pts = points;
+  let s = strength;
+  for (let it = 0; it < iterations; it++) {
+    const next: Pt[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const off = (rand() - 0.5) * s;
+      // Offset along the edge's normal.
+      next.push(a, [a[0] + dx / 2 - dy * off, a[1] + dy / 2 + dx * off]);
+    }
+    pts = next;
+    s *= 0.62;
+  }
+  return pts;
+}
+
+/**
+ * A random landmass outline: a wobbly ring for the overall shape, then fractal
+ * roughening for headlands, inlets and coves.
  */
 export function generateLandmass(cx: number, cy: number, rx: number, ry: number, seed: number): Pt[] {
   const rand = rng(seed);
-  const coarse = ringNoise(rand, 4);
-  const fine = ringNoise(rand, 7);
-  const points: Pt[] = [];
-  const steps = 160;
+  const coarse = ringNoise(rand, 5);
+  const ring: Pt[] = [];
+  // Few, strongly varied control points give peninsulas and gulfs.
+  const steps = 18;
   for (let i = 0; i < steps; i++) {
     const a = (i / steps) * Math.PI * 2;
-    const r = 1 + coarse(a) * 0.38 + fine(a * 1.7) * 0.12 + (rand() - 0.5) * 0.035;
-    points.push([cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r]);
+    const r = Math.max(0.35, 1 + coarse(a) * 0.62 + (rand() - 0.5) * 0.18);
+    ring.push([cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r]);
   }
-  return simplify(points, 2);
+  // Gentle first passes avoid spikes where the coast would cross itself.
+  return simplify(roughen(ring, rand, 6, 0.5), Math.max(rx, ry) / 500);
+}
+
+/** Scales a shape about its centre so it fits inside the map with a margin. */
+function fitInside(points: Pt[], width: number, height: number, margin: number): Pt[] {
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const s = Math.min(1, (width / 2 - margin) / Math.max(1, cx - x0, x1 - cx), (height / 2 - margin) / Math.max(1, cy - y0, y1 - cy));
+  // Shrink if needed, then nudge back on to the map.
+  let pts: Pt[] = points.map(([x, y]) => [cx + (x - cx) * s, cy + (y - cy) * s]);
+  const nx0 = cx - (cx - x0) * s;
+  const nx1 = cx + (x1 - cx) * s;
+  const ny0 = cy - (cy - y0) * s;
+  const ny1 = cy + (y1 - cy) * s;
+  const dx = nx0 < margin ? margin - nx0 : nx1 > width - margin ? width - margin - nx1 : 0;
+  const dy = ny0 < margin ? margin - ny0 : ny1 > height - margin ? height - margin - ny1 : 0;
+  if (dx || dy) pts = pts.map(([x, y]) => [x + dx, y + dy]);
+  return pts;
 }
 
 /** Several landmasses spread over the map, larger first. */
 export function generateWorld(width: number, height: number, seed: number, count: number): Pt[][] {
   const rand = rng(seed);
   const out: Pt[][] = [];
+  const placed: { x: number; y: number; r: number }[] = [];
+  // With several landmasses, the first is the largest but leaves room for the rest.
+  const mainScale = count === 1 ? 0.3 : count === 2 ? 0.2 : 0.22;
   for (let i = 0; i < count; i++) {
     const big = i === 0;
-    const scale = big ? 0.3 : 0.08 + rand() * 0.12;
-    const cx = width * (big ? 0.42 + rand() * 0.16 : 0.12 + rand() * 0.76);
-    const cy = height * (big ? 0.42 + rand() * 0.16 : 0.15 + rand() * 0.7);
-    out.push(generateLandmass(cx, cy, width * scale, height * scale * (0.8 + rand() * 0.5), Math.floor(rand() * 1e9)));
+    const scale = big ? mainScale : 0.06 + rand() * 0.08;
+    const rx = width * scale;
+    const ry = height * scale * (0.8 + rand() * 0.5);
+    // Try a few spots and keep the first that doesn't crowd an earlier landmass
+    // (coasts reach out ~1.5× the radius at their headlands).
+    let spot: { x: number; y: number } | null = null;
+    for (let attempt = 0; attempt < 40 && !spot; attempt++) {
+      const x = width * (big && count === 1 ? 0.42 + rand() * 0.16 : 0.15 + rand() * 0.7);
+      const y = height * (big && count === 1 ? 0.42 + rand() * 0.16 : 0.18 + rand() * 0.64);
+      const r = Math.max(rx, ry);
+      if (placed.every((p) => Math.hypot(p.x - x, p.y - y) > (p.r + r) * 1.45)) spot = { x, y };
+    }
+    if (!spot) continue;
+    placed.push({ ...spot, r: Math.max(rx, ry) });
+    out.push(fitInside(generateLandmass(spot.x, spot.y, rx, ry, Math.floor(rand() * 1e9)), width, height, Math.min(width, height) * 0.04));
   }
   return out;
 }
