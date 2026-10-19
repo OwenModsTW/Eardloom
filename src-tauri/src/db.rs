@@ -212,8 +212,10 @@ fn walk(node: &Value, out: &mut Extracted) {
                 if let Some(id) = attrs.and_then(|a| a.get("id")).and_then(Value::as_str) {
                     out.mentions.push(id.to_string());
                 }
-                if let Some(label) = attrs.and_then(|a| a.get("label")).and_then(Value::as_str) {
-                    out.text.push_str(label);
+                // The wording shown in the text ("Vex"), else the name it was linked by.
+                let display = attrs.and_then(|a| a.get("display")).and_then(Value::as_str).filter(|s| !s.trim().is_empty());
+                if let Some(text) = display.or_else(|| attrs.and_then(|a| a.get("label")).and_then(Value::as_str)) {
+                    out.text.push_str(text);
                 }
             }
             if let Some(text) = map.get("text").and_then(Value::as_str) {
@@ -322,6 +324,18 @@ mod tests {
         assert_eq!(e.mentions, vec!["abc"]);
         assert!(e.text.contains("Captain Vex boarded the ship."));
         assert_eq!(word_count(&e.text), 6);
+    }
+
+    #[test]
+    fn mentions_read_as_their_chosen_wording() {
+        let doc = json!({"type": "doc", "content": [{"type": "paragraph", "content": [
+            {"type": "mention", "attrs": {"id": "abc", "label": "Vex Arandel", "display": "Vex"}},
+            {"type": "text", "text": " smiled."}
+        ]}]});
+        let e = extract(&doc);
+        assert!(e.text.contains("Vex smiled."));
+        assert!(!e.text.contains("Arandel"));
+        assert_eq!(e.mentions, vec!["abc"]);
     }
 
     #[test]

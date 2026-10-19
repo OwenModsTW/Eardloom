@@ -21,6 +21,7 @@ import type { JSONContent } from "@tiptap/react";
 import { api } from "../api";
 import { docToHtml, esc, type HtmlOptions } from "./html";
 import { imagesIn, loadImages, type LoadedImage } from "./images";
+import { mentionText } from "../editor/mention";
 import { useStore } from "../../store";
 import type { DocSummary } from "../types";
 
@@ -75,7 +76,7 @@ async function gather(projectId: string, opts: BookOptions): Promise<Section[]> 
 }
 
 const mentionName = (node: JSONContent) =>
-  useStore.getState().entries.find((e) => e.id === node.attrs?.id)?.title || node.attrs?.label || "";
+  mentionText(node.attrs, useStore.getState().entries.find((e) => e.id === node.attrs?.id)?.title);
 
 // ---------------------------------------------------------------- HTML (EPUB)
 

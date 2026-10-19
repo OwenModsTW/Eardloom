@@ -1,6 +1,5 @@
 import { Editor, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import Mention from "@tiptap/extension-mention";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
@@ -10,6 +9,7 @@ import { api, newId } from "../api";
 import { useStore } from "../../store";
 import { CommentMark, useActiveEditor } from "../editor/comment";
 import { RICH_BLOCKS } from "../editor/blocks";
+import { EntryMention } from "../editor/mention";
 import { findMatches } from "../editor/search";
 import { parseInline, parseMarkdown } from "../markdown";
 import { entryChanged, flushEntry } from "../entrySync";
@@ -118,7 +118,7 @@ async function saveEntry(entry: Entry) {
 /** Everything a chapter can contain, for editing chapters that aren't open on screen. */
 export const CHAPTER_EXTENSIONS = [
   StarterKit,
-  Mention,
+  EntryMention,
   TextAlign.configure({ types: ["heading", "paragraph"] }),
   Highlight.configure({ multicolor: true }),
   TextStyle,

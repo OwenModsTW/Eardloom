@@ -16,7 +16,6 @@ import { Color, TextStyle } from "@tiptap/extension-text-style";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import Typography from "@tiptap/extension-typography";
-import Mention from "@tiptap/extension-mention";
 import { CharacterCount, Focus, Placeholder } from "@tiptap/extensions";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { useStore } from "../store";
@@ -29,6 +28,8 @@ import { Search } from "../lib/editor/search";
 import { Spellcheck } from "../lib/editor/spellcheck";
 import { CommentMark, useActiveEditor } from "../lib/editor/comment";
 import { RICH_BLOCKS } from "../lib/editor/blocks";
+import { EntryMention, mentionText, nameVariants } from "../lib/editor/mention";
+import { askText } from "./Prompt";
 import { ignoreWord, suggestions } from "../lib/spell";
 import { openMenuAt } from "./ContextMenu";
 import { rtfToContent } from "../lib/editor/rtf";
@@ -51,34 +52,72 @@ export function findWhenOpened(term: string) {
 
 export const MentionClickContext = createContext<(id: string) => void>(() => {});
 
-function MentionChip({ node }: NodeViewProps) {
+function MentionChip({ node, updateAttributes, editor }: NodeViewProps) {
   const id = node.attrs.id as string;
   const entry = useStore((s) => s.entries.find((e) => e.id === id));
   const type = useStore((s) => s.types.find((t) => t.id === entry?.typeId));
   const onClick = useContext(MentionClickContext);
+  const display = (node.attrs.display as string | null) || null;
+
+  // Right-click: choose how this mention reads, without changing what it links to.
+  const menu = (e: React.MouseEvent) => {
+    if (!entry || !editor.isEditable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const shown = mentionText(node.attrs, entry.title);
+    openMenuAt(e.clientX, e.clientY, [
+      { label: "Open entry", onClick: () => onClick(id) },
+      "separator",
+      ...nameVariants(entry).map((name) => ({
+        label: name === shown ? <strong>{name}</strong> : name,
+        onClick: () => updateAttributes({ display: name === entry.title ? null : name }),
+      })),
+      {
+        label: "Other wording…",
+        onClick: async () => {
+          const text = await askText({
+            title: "Show this mention as",
+            label: `It still links to ${entry.title}.`,
+            placeholder: "e.g. the Captain",
+            initial: shown,
+            confirm: "Use this",
+          });
+          if (text) updateAttributes({ display: text === entry.title ? null : text });
+        },
+      },
+    ]);
+  };
+
   return (
     <NodeViewWrapper
       as="span"
       className={`mention ${entry ? "" : "mention-missing"}`}
       style={{ "--chip": type?.color ?? "var(--muted)" } as React.CSSProperties}
       onClick={() => entry && onClick(id)}
-      title={entry ? entry.summary || entry.title : "This entry was deleted"}
+      onContextMenu={menu}
+      title={entry ? `${display ? `${entry.title}: ` : ""}${entry.summary || entry.title}\nRight-click to change how it reads` : "This entry was deleted"}
     >
-      {entry?.title ?? node.attrs.label ?? "missing"}
+      {entry ? mentionText(node.attrs, entry.title) : (display ?? node.attrs.label ?? "missing")}
     </NodeViewWrapper>
   );
+}
+
+/** One way of writing an entry's name, offered while typing @. */
+interface NameMatch {
+  entry: EntrySummary;
+  text: string;
 }
 
 interface ListHandle {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 }
 
-const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ items, command, query }, ref) => {
+const MentionList = forwardRef<ListHandle, SuggestionProps<NameMatch>>(({ items, command, query }, ref) => {
   const [index, setIndex] = useState(items.length ? 0 : -1);
   const types = useStore((s) => s.types);
   const name = query.trim();
   // Offer to create the entry when nothing matches the name exactly.
-  const exact = items.some((e) => [e.title, ...e.aliases].some((n) => n.toLowerCase() === name.toLowerCase()));
+  const exact = items.some(({ entry: e }) => [e.title, ...e.aliases].some((n) => n.toLowerCase() === name.toLowerCase()));
   const looksLikeName = name.length > 0 && name.split(/\s+/).length <= 6;
   const creates = looksLikeName && !exact ? types : [];
   const total = items.length + creates.length;
@@ -87,8 +126,8 @@ const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ ite
 
   const pick = async (i: number) => {
     if (i < items.length) {
-      const item = items[i];
-      return command({ id: item.id, label: item.title } as never);
+      const { entry, text } = items[i];
+      return command({ id: entry.id, label: entry.title, display: text === entry.title ? null : text } as never);
     }
     const type = creates[i - items.length];
     if (!type) return;
@@ -114,11 +153,11 @@ const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ ite
     );
   return (
     <div className="menu mention-list">
-      {items.map((item, i) => {
+      {items.map(({ entry: item, text }, i) => {
         const type = types.find((t) => t.id === item.typeId);
         return (
           <button
-            key={item.id}
+            key={`${item.id}:${text}`}
             className={i === index ? "active" : ""}
             onMouseEnter={() => setIndex(i)}
             onMouseDown={(e) => (e.preventDefault(), pick(i))}
@@ -126,8 +165,8 @@ const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ ite
             <span className="menu-icon">
               <EntryGlyph entry={item} size={13} />
             </span>
-            <span>{item.title || "Untitled"}</span>
-            <small>{type?.name}</small>
+            <span>{text || "Untitled"}</span>
+            <small>{text !== item.title ? item.title : type?.name}</small>
           </button>
         );
       })}
@@ -157,38 +196,47 @@ const MentionList = forwardRef<ListHandle, SuggestionProps<EntrySummary>>(({ ite
   );
 });
 
-function matchEntries(query: string): EntrySummary[] {
+/**
+ * Entries matching what's typed after @, offered by the name that matched: typing "@Aeth"
+ * offers "Vex" as well as "Vex Arandel", so the text reads the way the author writes.
+ */
+function matchEntries(query: string): NameMatch[] {
   const q = query.trim().toLowerCase();
   const entries = useStore.getState().entries;
-  if (!q) return entries.slice(0, 8);
-  const score = (e: EntrySummary) => {
-    const names = [e.title, ...e.aliases].map((n) => n.toLowerCase());
-    if (names.some((n) => n.startsWith(q))) return 0;
-    if (names.some((n) => n.includes(q))) return 1;
-    return -1;
-  };
-  return entries
-    .map((e) => [e, score(e)] as const)
-    .filter(([, s]) => s >= 0)
-    .sort((a, b) => a[1] - b[1])
+  if (!q) return entries.slice(0, 8).map((entry) => ({ entry, text: entry.title }));
+  const out: (NameMatch & { score: number })[] = [];
+  for (const entry of entries) {
+    const variants = nameVariants(entry);
+    const matched = variants
+      .map((text) => ({ text, score: text.toLowerCase() === q ? 0 : text.toLowerCase().startsWith(q) ? 1 : text.toLowerCase().includes(q) ? 3 : -1 }))
+      .filter((m) => m.score >= 0);
+    if (!matched.length) continue;
+    // The shortest matching name first ("Vex"), then the full title.
+    matched.sort((a, b) => a.score - b.score || a.text.length - b.text.length);
+    const best = matched[0];
+    out.push({ entry, text: best.text, score: best.score });
+    if (best.text !== entry.title) out.push({ entry, text: entry.title, score: best.score + 1 });
+  }
+  return out
+    .sort((a, b) => a.score - b.score)
     .slice(0, 8)
-    .map(([e]) => e);
+    .map(({ entry, text }) => ({ entry, text }));
 }
 
-const LoreMention = Mention.extend({
+const LoreMention = EntryMention.extend({
   addNodeView() {
     return ReactNodeViewRenderer(MentionChip);
   },
 }).configure({
-  renderText: ({ node }) => node.attrs.label ?? "",
+  renderText: ({ node }) => mentionText(node.attrs, useStore.getState().entries.find((e) => e.id === node.attrs.id)?.title),
   suggestion: {
     char: "@",
     // Names have spaces: "@Captain Rhys".
     allowSpaces: true,
     items: ({ query }) => matchEntries(query),
     render: () => {
-      let renderer: ReactRenderer<ListHandle, SuggestionProps<EntrySummary>> | null = null;
-      const place = (props: SuggestionProps<EntrySummary>) => {
+      let renderer: ReactRenderer<ListHandle, SuggestionProps<NameMatch>> | null = null;
+      const place = (props: SuggestionProps<NameMatch>) => {
         const rect = props.clientRect?.();
         const el = renderer?.element as HTMLElement | undefined;
         if (!rect || !el) return;

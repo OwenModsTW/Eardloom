@@ -1,6 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { api } from "../api";
 import { docToHtml, esc } from "./html";
+import { mentionText } from "../editor/mention";
 import type { Calendar, Entry, EntryType, WorldDate, WorldInfo } from "../types";
 import { EMPTY_CALENDAR, formatDate } from "../calendar";
 
@@ -156,7 +157,7 @@ export async function buildSite(world: WorldInfo, types: EntryType[], opts: Site
   const rich = (doc: JSONContent | null | undefined) =>
     docToHtml(doc, {
       headingOffset: 1,
-      mention: (m) => link(m.attrs?.id, titleOf(m.attrs?.id) ?? m.attrs?.label),
+      mention: (m) => link(m.attrs?.id, mentionText(m.attrs, titleOf(m.attrs?.id))),
       image: (asset) => (articleImages.add(asset), `assets/${asset}`),
       footnote: (text) => `<sup class="footnote" title="${esc(text)}">*</sup>`,
     });
