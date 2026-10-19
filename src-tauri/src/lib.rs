@@ -64,6 +64,7 @@ pub fn run() {
             ai::connector_status,
             ai::connect_claude_desktop,
             ai::connect_codex,
+            ai::connect_claude_code,
             ai::assistant_set_private,
             ai::assistant_resolve,
             writing::list_projects,

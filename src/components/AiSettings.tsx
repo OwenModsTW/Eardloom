@@ -9,6 +9,8 @@ interface Status {
   claudeDesktopConnected: boolean;
   codexInstalled: boolean;
   codexConnected: boolean;
+  claudeCodeInstalled: boolean;
+  claudeCodeConnected: boolean;
   claudeCodeCommand: string;
 }
 
@@ -36,7 +38,7 @@ export function AiSettings() {
     reload();
   }, []);
 
-  const toggle = async (cmd: "connect_claude_desktop" | "connect_codex", connect: boolean, name: string) => {
+  const toggle = async (cmd: "connect_claude_desktop" | "connect_codex" | "connect_claude_code", connect: boolean, name: string) => {
     try {
       await invoke(cmd, { connect });
       await reload();
@@ -83,10 +85,29 @@ export function AiSettings() {
               {status.codexConnected ? "Disconnect" : "Connect"}
             </button>
           </div>
-          <div className="ai-app column">
+          <div className="ai-app">
             <div>
               <strong>Claude Code</strong>
-              <small>Run this once in a terminal:</small>
+              <small>
+                {status.claudeCodeConnected
+                  ? "Connected. Eardloom's tools are available in Claude Code."
+                  : status.claudeCodeInstalled
+                    ? "Installed."
+                    : "Not found on this computer."}
+              </small>
+            </div>
+            {status.claudeCodeInstalled && (
+              <button
+                className={status.claudeCodeConnected ? "ghost" : "primary"}
+                onClick={() => toggle("connect_claude_code", !status.claudeCodeConnected, "Claude Code")}
+              >
+                {status.claudeCodeConnected ? "Disconnect" : "Connect"}
+              </button>
+            )}
+          </div>
+          <div className="ai-app column">
+            <div>
+              <small>Or set up Claude Code yourself in PowerShell:</small>
             </div>
             <div className="row">
               <code className="grow">{status.claudeCodeCommand}</code>

@@ -642,6 +642,36 @@ fn codex_config() -> Option<PathBuf> {
 
 const CODEX_SECTION: &str = "[mcp_servers.eardloom]";
 
+/// The author's Claude Code command-line tool, if installed. Only ever used to add or
+/// remove Eardloom from its list of tools; Eardloom never runs it for anything else.
+fn find_claude_code() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let exe = dir.join("claude.exe");
+        if exe.is_file() {
+            return Some(exe);
+        }
+        // npm installs a claude.cmd shim next to node_modules.
+        if dir.join("claude.cmd").is_file() {
+            let real = dir.join("node_modules").join("@anthropic-ai").join("claude-code").join("bin").join("claude.exe");
+            if real.is_file() {
+                return Some(real);
+            }
+        }
+    }
+    let native = PathBuf::from(std::env::var_os("USERPROFILE")?).join(".local").join("bin").join("claude.exe");
+    native.is_file().then_some(native)
+}
+
+/// Whether Claude Code's user settings already list Eardloom.
+fn claude_code_connected() -> bool {
+    std::env::var_os("USERPROFILE")
+        .map(|h| PathBuf::from(h).join(".claude.json"))
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .is_some_and(|v| v.pointer("/mcpServers/eardloom").is_some())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectorStatus {
@@ -650,7 +680,10 @@ pub struct ConnectorStatus {
     pub claude_desktop_connected: bool,
     pub codex_installed: bool,
     pub codex_connected: bool,
-    /// For Claude Code, which the author sets up with one command in their own terminal.
+    pub claude_code_installed: bool,
+    pub claude_code_connected: bool,
+    /// The same setup as a terminal command, for anyone who prefers to run it themselves
+    /// (quoted so PowerShell passes the `--` through).
     pub claude_code_command: String,
 }
 
@@ -666,7 +699,9 @@ pub fn connector_status() -> CmdResult<ConnectorStatus> {
         claude_desktop_connected: desktop_json.pointer("/mcpServers/eardloom").is_some(),
         codex_installed: codex.as_ref().and_then(|p| p.parent()).is_some_and(|d| d.is_dir()),
         codex_connected: codex_text.contains(CODEX_SECTION),
-        claude_code_command: format!("claude mcp add --scope user eardloom -- \"{exe}\" --mcp"),
+        claude_code_installed: find_claude_code().is_some(),
+        claude_code_connected: claude_code_connected(),
+        claude_code_command: format!("claude mcp add --scope user eardloom '--' \"{exe}\" --mcp"),
         exe,
     })
 }
@@ -729,6 +764,44 @@ pub fn connect_codex(connect: bool) -> CmdResult<()> {
         std::fs::create_dir_all(dir).map_err(err)?;
     }
     std::fs::write(&path, text).map_err(err)
+}
+
+/// Adds (or removes) Eardloom in Claude Code's tools using its own `claude mcp` command,
+/// with arguments passed directly (no shell, so nothing gets mangled).
+#[tauri::command]
+pub fn connect_claude_code(connect: bool) -> CmdResult<()> {
+    let claude = find_claude_code().ok_or("Claude Code isn't installed on this computer.")?;
+    let exe = exe_path()?;
+    let mut cmd = std::process::Command::new(claude);
+    if connect {
+        // Replace any earlier entry (e.g. from an older install location).
+        if claude_code_connected() {
+            let mut remove = std::process::Command::new(find_claude_code().ok_or("Claude Code isn't installed.")?);
+            remove.args(["mcp", "remove", "eardloom", "--scope", "user"]);
+            hide_window(&mut remove);
+            let _ = remove.output();
+        }
+        cmd.args(["mcp", "add", "--scope", "user", "eardloom", "--", &exe, "--mcp"]);
+    } else {
+        cmd.args(["mcp", "remove", "eardloom", "--scope", "user"]);
+    }
+    hide_window(&mut cmd);
+    let out = cmd.output().map_err(|e| format!("Couldn't run Claude Code: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(format!("Claude Code said: {}", String::from_utf8_lossy(&out.stderr).trim()))
+    }
+}
+
+fn hide_window(cmd: &mut std::process::Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    #[cfg(not(windows))]
+    let _ = cmd;
 }
 
 #[tauri::command]
