@@ -1093,3 +1093,16 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .licence-text { padding: 4px 4px 10px; }
 .licence-text pre { white-space: pre-wrap; font: 11.5px/1.45 Consolas, monospace; color: var(--text-soft); background: var(--bg-input); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; max-height: 320px; overflow-y: auto; }
 .mono { font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+
+/* ---------- markdown headings, rules, numbered lists; assistant overflow ---------- */
+.markdown ol { margin: 0 0 8px; padding-left: 20px; color: var(--text-soft); }
+.markdown .md-h { color: var(--text); font-weight: 600; margin: 12px 0 4px; }
+.markdown .md-h:first-child { margin-top: 0; }
+.markdown .md-h1, .markdown .md-h2 { font: 600 17px var(--serif); }
+.markdown .md-h3 { font: 600 15.5px var(--serif); }
+.markdown .md-h4 { font-size: 14px; color: var(--accent); }
+.markdown hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+.markdown code { font: 12.5px Consolas, monospace; background: var(--bg-input); padding: 0 3px; border-radius: 3px; }
+.msg.assistant .markdown ol { color: var(--text); }
+.assistant-list { overflow-x: hidden; scrollbar-gutter: stable; }
+.assistant-list > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
