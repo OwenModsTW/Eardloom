@@ -9,6 +9,7 @@ import Superscript from "@tiptap/extension-superscript";
 import { api, newId } from "../api";
 import { useStore } from "../../store";
 import { CommentMark, useActiveEditor } from "../editor/comment";
+import { RICH_BLOCKS } from "../editor/blocks";
 import { findMatches } from "../editor/search";
 import { parseInline, parseMarkdown } from "../markdown";
 import { entryChanged, flushEntry } from "../entrySync";
@@ -127,6 +128,7 @@ function headless(content: JSONContent | null) {
       Subscript,
       Superscript,
       CommentMark,
+      ...RICH_BLOCKS,
     ],
     content: content ?? undefined,
   });

@@ -3,17 +3,24 @@ import {
   AlignmentType,
   Document,
   ExternalHyperlink,
+  FootnoteReferenceRun,
+  ImageRun,
   ShadingType,
   HeadingLevel,
   Packer,
   PageBreak,
   Paragraph,
+  Table,
+  TableCell,
+  TableRow,
   TextRun,
+  WidthType,
   type ParagraphChild,
 } from "docx";
 import type { JSONContent } from "@tiptap/react";
 import { api } from "../api";
-import { docToHtml, esc } from "./html";
+import { docToHtml, esc, type HtmlOptions } from "./html";
+import { imagesIn, loadImages, type LoadedImage } from "./images";
 import { useStore } from "../../store";
 import type { DocSummary } from "../types";
 
@@ -72,12 +79,20 @@ const mentionName = (node: JSONContent) =>
 
 // ---------------------------------------------------------------- HTML (EPUB)
 
-const blockHtml = (n: JSONContent, opts: BookOptions) =>
+const blockHtml = (n: JSONContent, opts: BookOptions, extra: Partial<HtmlOptions> = {}) =>
   docToHtml(n, {
     // Chapter titles are h1/h2, so headings inside a chapter start at h3.
     headingOffset: 2,
     mention: (m) => (opts.plainLinks ? esc(mentionName(m)) : `<span class="entry">${esc(mentionName(m))}</span>`),
+    ...extra,
   });
+
+/** All the world images a book uses. */
+const bookImages = (sections: Section[]) => {
+  const names = new Set<string>();
+  for (const s of sections) imagesIn(s.body, names);
+  return loadImages(names);
+};
 
 const EPUB_CSS = `
 body { font-family: serif; line-height: 1.5; margin: 0 5%; }
@@ -92,6 +107,13 @@ blockquote { margin: 1em 2em; font-style: italic; }
 .title-page { text-align: center; margin-top: 30%; }
 .title-page h1 { page-break-before: auto; font-size: 2.2em; margin: 0 0 1em; }
 .title-page p { text-indent: 0; text-align: center; font-size: 1.2em; }
+p.image { text-indent: 0; text-align: center; margin: 1em 0; }
+img { max-width: 100%; height: auto; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { border: 1px solid #999; padding: 0.3em 0.5em; vertical-align: top; }
+th p, td p { text-indent: 0; text-align: left; }
+.notes { margin-top: 2em; font-size: 0.85em; }
+.notes p { text-indent: 0; }
 `;
 
 const xhtml = (title: string, body: string) => `<?xml version="1.0" encoding="utf-8"?>
@@ -119,10 +141,29 @@ async function toEpub(sections: Section[], opts: BookOptions): Promise<Uint8Arra
     "OEBPS/title.xhtml",
     xhtml(opts.title, `<section class="title-page"><h1>${esc(opts.title)}</h1>${opts.author ? `<p>${esc(opts.author)}</p>` : ""}</section>`),
   );
+  const images = await bookImages(sections);
+  for (const img of images.values()) zip.file(`OEBPS/images/${img.name}`, img.bytes);
   for (const f of files) {
     const heading =
       f.kind === "part" ? `<h1 class="part">${esc(f.title)}</h1>` : opts.chapterTitles ? `<h2>${esc(f.title)}</h2>` : "";
-    zip.file(`OEBPS/${f.file}`, xhtml(f.title, heading + (f.body ? blockHtml(f.body, opts) : "")));
+    // Footnotes are numbered per chapter and gathered at its end.
+    const notes: string[] = [];
+    const body = f.body
+      ? blockHtml(f.body, opts, {
+          image: (asset) => (images.has(asset) ? `images/${images.get(asset)!.name}` : null),
+          footnote: (text) => {
+            notes.push(text);
+            const k = notes.length;
+            return `<sup><a epub:type="noteref" href="#fn${k}" id="fnref${k}">${k}</a></sup>`;
+          },
+        })
+      : "";
+    const endnotes = notes.length
+      ? `<section class="notes" epub:type="footnotes"><hr/>${notes
+          .map((t, i) => `<aside epub:type="footnote" id="fn${i + 1}"><p><a href="#fnref${i + 1}">${i + 1}.</a> ${esc(t)}</p></aside>`)
+          .join("")}</section>`
+      : "";
+    zip.file(`OEBPS/${f.file}`, xhtml(f.title, heading + body + endnotes));
   }
 
   const navItems = files.map((f) => `<li><a href="${f.file}">${esc(f.title || "Untitled")}</a></li>`).join("\n");
@@ -162,6 +203,7 @@ async function toEpub(sections: Section[], opts: BookOptions): Promise<Uint8Arra
     <item id="css" href="style.css" media-type="text/css"/>
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${files.map((f, i) => `<item id="s${i + 1}" href="${f.file}" media-type="application/xhtml+xml"/>`).join("\n    ")}
+    ${[...images.values()].map((img, i) => `<item id="img${i + 1}" href="images/${esc(img.name)}" media-type="${img.mime}"/>`).join("\n    ")}
   </manifest>
   <spine toc="ncx">
     <itemref idref="title"/>
@@ -176,8 +218,19 @@ async function toEpub(sections: Section[], opts: BookOptions): Promise<Uint8Arra
 
 // ---------------------------------------------------------------- Markdown
 
-function inlineMd(n: JSONContent, opts: BookOptions): string {
+/** Footnotes collected while writing Markdown; numbered through the whole book. */
+interface MdNotes {
+  pending: string[];
+  next: number;
+}
+
+function inlineMd(n: JSONContent, opts: BookOptions, notes?: MdNotes): string {
   if (n.type === "hardBreak") return "  \n";
+  if (n.type === "footnote") {
+    if (!notes) return "";
+    notes.pending.push(String(n.attrs?.text ?? ""));
+    return `[^${notes.next + notes.pending.length - 1}]`;
+  }
   if (n.type === "mention") {
     const name = mentionName(n);
     return opts.plainLinks ? name : `[[${name}]]`;
@@ -193,29 +246,44 @@ function inlineMd(n: JSONContent, opts: BookOptions): string {
   return t;
 }
 
-function blockMd(n: JSONContent, opts: BookOptions, prefix = ""): string {
-  const inner = () => (n.content ?? []).map((c) => inlineMd(c, opts)).join("");
+function blockMd(n: JSONContent, opts: BookOptions, prefix = "", notes?: MdNotes): string {
+  const inner = () => (n.content ?? []).map((c) => inlineMd(c, opts, notes)).join("");
+  const kids = (p = "") => (n.content ?? []).map((c) => blockMd(c, opts, p, notes)).join("");
   switch (n.type) {
     case "doc":
-      return (n.content ?? []).map((c) => blockMd(c, opts)).join("");
+      return kids();
+    case "image":
+      return `*[Image${n.attrs?.alt ? `: ${n.attrs.alt}` : ""}]*\n\n`;
+    case "table": {
+      const rows = (n.content ?? []).map((r) =>
+        (r.content ?? []).map((c) => blockMd(c, opts, "", notes).replace(/\s*\n+\s*/g, " ").replace(/\|/g, "\\|").trim()),
+      );
+      if (!rows.length) return "";
+      const width = Math.max(...rows.map((r) => r.length));
+      const line = (r: string[]) => `| ${[...r, ...Array(width - r.length).fill("")].join(" | ")} |`;
+      return [line(rows[0]), `|${" --- |".repeat(width)}`, ...rows.slice(1).map(line)].join("\n") + "\n\n";
+    }
+    case "tableCell":
+    case "tableHeader":
+      return kids();
     case "paragraph":
       return `${prefix}${inner()}\n\n`;
     case "heading":
       return `${"#".repeat(Math.min(6, (n.attrs?.level ?? 1) + 2))} ${inner()}\n\n`;
     case "blockquote":
-      return (n.content ?? []).map((c) => blockMd(c, opts, "> ")).join("");
+      return kids("> ");
     case "bulletList":
     case "orderedList":
       return (
         (n.content ?? [])
           .map((li, i) => {
             const marker = n.type === "orderedList" ? `${i + 1}. ` : "- ";
-            return marker + blockMd(li, opts).trim().replace(/\n/g, "\n   ");
+            return marker + blockMd(li, opts, "", notes).trim().replace(/\n/g, "\n   ");
           })
           .join("\n") + "\n\n"
       );
     case "listItem":
-      return (n.content ?? []).map((c) => blockMd(c, opts)).join("");
+      return kids();
     case "codeBlock":
       return "```\n" + (n.content ?? []).map((c) => c.text ?? "").join("") + "\n```\n\n";
     case "horizontalRule":
@@ -227,11 +295,18 @@ function blockMd(n: JSONContent, opts: BookOptions, prefix = ""): string {
 
 function toMarkdown(sections: Section[], opts: BookOptions): Uint8Array {
   let md = `# ${opts.title}\n\n${opts.author ? `*${opts.author}*\n\n` : ""}`;
+  const notes: MdNotes = { pending: [], next: 1 };
   for (const s of sections) {
     if (s.kind === "part") md += `\n# ${s.title}\n\n`;
     else {
       if (opts.chapterTitles) md += `\n## ${s.title}\n\n`;
-      if (s.body) md += blockMd(s.body, opts);
+      if (s.body) md += blockMd(s.body, opts, "", notes);
+      // Each chapter's footnotes follow it.
+      if (notes.pending.length) {
+        md += notes.pending.map((t, i) => `[^${notes.next + i}]: ${t}`).join("\n") + "\n\n";
+        notes.next += notes.pending.length;
+        notes.pending = [];
+      }
     }
   }
   return new TextEncoder().encode(md.replace(/\n{3,}/g, "\n\n").trim() + "\n");
@@ -248,9 +323,24 @@ const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> 
   justify: AlignmentType.JUSTIFIED,
 };
 
-function runs(nodes: JSONContent[] | undefined, opts: BookOptions): ParagraphChild[] {
+/** What Word export gathers along the way: images to embed and the document's footnotes. */
+interface DocxContext {
+  images: Map<string, LoadedImage>;
+  footnotes: Record<number, { children: Paragraph[] }>;
+  next: number;
+}
+
+/** Word pages are about 6.3 inches wide at 96 pixels to the inch. */
+const MAX_IMAGE_WIDTH = 600;
+
+function runs(nodes: JSONContent[] | undefined, opts: BookOptions, ctx: DocxContext): ParagraphChild[] {
   return (nodes ?? []).map((n) => {
     if (n.type === "hardBreak") return new TextRun({ text: "", break: 1 });
+    if (n.type === "footnote") {
+      const id = ctx.next++;
+      ctx.footnotes[id] = { children: [new Paragraph({ children: [new TextRun(String(n.attrs?.text ?? ""))] })] };
+      return new FootnoteReferenceRun(id);
+    }
     if (n.type === "mention") return new TextRun({ text: mentionName(n), smallCaps: !opts.plainLinks });
     const marks = new Map((n.marks ?? []).map((m) => [m.type, m.attrs ?? {}]));
     const highlight = hex6(marks.get("highlight")?.color);
@@ -270,22 +360,60 @@ function runs(nodes: JSONContent[] | undefined, opts: BookOptions): ParagraphChi
   });
 }
 
-function docxBlocks(n: JSONContent, opts: BookOptions, quote = false): Paragraph[] {
+function docxBlocks(n: JSONContent, opts: BookOptions, ctx: DocxContext, quote = false): (Paragraph | Table)[] {
   switch (n.type) {
     case "doc":
     case "blockquote":
-      return (n.content ?? []).flatMap((c) => docxBlocks(c, opts, quote || n.type === "blockquote"));
+      return (n.content ?? []).flatMap((c) => docxBlocks(c, opts, ctx, quote || n.type === "blockquote"));
     case "paragraph":
-      return [new Paragraph({ children: runs(n.content, opts), indent: quote ? { left: 720 } : undefined, alignment: ALIGN[n.attrs?.textAlign] })];
+      return [new Paragraph({ children: runs(n.content, opts, ctx), indent: quote ? { left: 720 } : undefined, alignment: ALIGN[n.attrs?.textAlign] })];
     case "heading":
-      return [new Paragraph({ children: runs(n.content, opts), heading: HeadingLevel.HEADING_3, alignment: ALIGN[n.attrs?.textAlign] })];
+      return [new Paragraph({ children: runs(n.content, opts, ctx), heading: HeadingLevel.HEADING_3, alignment: ALIGN[n.attrs?.textAlign] })];
     case "bulletList":
     case "orderedList":
       return (n.content ?? []).flatMap((li) =>
         (li.content ?? []).flatMap((p) =>
-          p.type === "paragraph" ? [new Paragraph({ children: runs(p.content, opts), bullet: { level: 0 } })] : docxBlocks(p, opts),
+          p.type === "paragraph" ? [new Paragraph({ children: runs(p.content, opts, ctx), bullet: { level: 0 } })] : docxBlocks(p, opts, ctx),
         ),
       );
+    case "image": {
+      const img = typeof n.attrs?.asset === "string" ? ctx.images.get(n.attrs.asset) : undefined;
+      if (!img) return [];
+      const scale = Math.min(1, MAX_IMAGE_WIDTH / img.width);
+      return [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new ImageRun({
+              type: img.type,
+              data: img.bytes,
+              transformation: { width: Math.round(img.width * scale), height: Math.round(img.height * scale) },
+              altText: n.attrs?.alt ? { name: String(n.attrs.alt), description: String(n.attrs.alt), title: String(n.attrs.alt) } : undefined,
+            }),
+          ],
+        }),
+      ];
+    }
+    case "table":
+      return [
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: (n.content ?? []).map(
+            (r) =>
+              new TableRow({
+                tableHeader: (r.content ?? []).every((c) => c.type === "tableHeader"),
+                children: (r.content ?? []).map((c) => {
+                  const inner = docxBlocks({ type: "doc", content: c.content }, opts, ctx).filter((b): b is Paragraph => b instanceof Paragraph);
+                  return new TableCell({
+                    children: inner.length ? inner : [new Paragraph("")],
+                    columnSpan: Number(c.attrs?.colspan) > 1 ? Number(c.attrs!.colspan) : undefined,
+                    rowSpan: Number(c.attrs?.rowspan) > 1 ? Number(c.attrs!.rowspan) : undefined,
+                  });
+                }),
+              }),
+          ),
+        }),
+      ];
     case "codeBlock":
       return [new Paragraph({ children: [new TextRun({ text: (n.content ?? []).map((c) => c.text ?? "").join(""), font: "Consolas" })] })];
     case "horizontalRule":
@@ -296,7 +424,8 @@ function docxBlocks(n: JSONContent, opts: BookOptions, quote = false): Paragraph
 }
 
 async function toDocx(sections: Section[], opts: BookOptions): Promise<Uint8Array> {
-  const children: Paragraph[] = [
+  const ctx: DocxContext = { images: await bookImages(sections), footnotes: {}, next: 1 };
+  const children: (Paragraph | Table)[] = [
     new Paragraph({ children: [new TextRun({ text: opts.title, size: 56 })], alignment: AlignmentType.CENTER, spacing: { before: 3000, after: 400 } }),
   ];
   if (opts.author) children.push(new Paragraph({ children: [new TextRun({ text: opts.author, size: 28 })], alignment: AlignmentType.CENTER }));
@@ -308,11 +437,12 @@ async function toDocx(sections: Section[], opts: BookOptions): Promise<Uint8Arra
     }
     if (opts.chapterTitles)
       children.push(new Paragraph({ text: s.title, heading: HeadingLevel.HEADING_2, alignment: AlignmentType.CENTER, spacing: { before: 1200, after: 600 } }));
-    if (s.body) children.push(...docxBlocks(s.body, opts));
+    if (s.body) children.push(...docxBlocks(s.body, opts, ctx));
   }
   const doc = new Document({
     creator: opts.author || undefined,
     title: opts.title,
+    footnotes: ctx.footnotes,
     styles: {
       default: {
         document: { run: { font: "Georgia", size: 24 }, paragraph: { spacing: { line: 360, after: 120 } } },

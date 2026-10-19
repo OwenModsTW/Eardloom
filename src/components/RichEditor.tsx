@@ -28,6 +28,7 @@ import { FindBar } from "./FindBar";
 import { Search } from "../lib/editor/search";
 import { Spellcheck } from "../lib/editor/spellcheck";
 import { CommentMark, useActiveEditor } from "../lib/editor/comment";
+import { RICH_BLOCKS } from "../lib/editor/blocks";
 import { ignoreWord, suggestions } from "../lib/spell";
 import { openMenuAt } from "./ContextMenu";
 import { rtfToContent } from "../lib/editor/rtf";
@@ -300,6 +301,7 @@ export function RichEditor({
             Search,
             CommentMark,
             Focus.configure({ className: "has-focus", mode: "shallowest" }),
+            ...RICH_BLOCKS,
           ]),
     ],
     editorProps: {

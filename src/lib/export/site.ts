@@ -151,8 +151,15 @@ export async function buildSite(world: WorldInfo, types: EntryType[], opts: Site
     const color = typeOf(e)?.color;
     return `<a class="mention" href="${entryUrl.get(id)}"${color ? ` style="--c:${color}"` : ""}>${text}</a>`;
   };
+  // Images used in the articles that are shared (so nothing from a private entry is copied).
+  const articleImages = new Set<string>();
   const rich = (doc: JSONContent | null | undefined) =>
-    docToHtml(doc, { headingOffset: 1, mention: (m) => link(m.attrs?.id, titleOf(m.attrs?.id) ?? m.attrs?.label) });
+    docToHtml(doc, {
+      headingOffset: 1,
+      mention: (m) => link(m.attrs?.id, titleOf(m.attrs?.id) ?? m.attrs?.label),
+      image: (asset) => (articleImages.add(asset), `assets/${asset}`),
+      footnote: (text) => `<sup class="footnote" title="${esc(text)}">*</sup>`,
+    });
 
   const thumb = (e: Entry, color?: string) =>
     e.image
@@ -281,6 +288,6 @@ ${visibleTypes
     content: page(world.name, `<h1>${esc(world.name)}</h1>${world.description ? `<p class="premise">${esc(world.description)}</p>` : ""}<div class="cats">${cats}</div>`),
   });
 
-  const assets = [...new Set(entries.map((e) => e.image).filter((x): x is string => !!x))];
+  const assets = [...new Set([...entries.map((e) => e.image).filter((x): x is string => !!x), ...articleImages])];
   return { files, assets, count: entries.length };
 }

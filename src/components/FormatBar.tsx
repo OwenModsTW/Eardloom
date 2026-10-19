@@ -3,8 +3,11 @@ import { useEditorState, type Editor } from "@tiptap/react";
 import {
   AlignCenter, AlignJustify, AlignLeft, AlignRight, Baseline, Bold, Highlighter, IndentDecrease, IndentIncrease,
   Italic, Link2, List, ListOrdered, MessageSquarePlus, Minus, MoreHorizontal, Quote, Redo2, RemoveFormatting, Search, Strikethrough,
-  Subscript, Superscript, Type, Underline, Undo2,
+  Subscript, Superscript, Type, Underline, Undo2, Plus, ImagePlus, Table2, Asterisk,
 } from "lucide-react";
+import { open as openFile } from "@tauri-apps/plugin-dialog";
+import { api } from "../lib/api";
+import { askText } from "./Prompt";
 import { Select } from "./Select";
 import { openMenu } from "./ContextMenu";
 import { FONTS, getManuscriptLook, setManuscriptLook, type ManuscriptLook } from "../lib/prefs";
@@ -159,6 +162,7 @@ export function FormatBar({ editor, manuscript, onFind }: { editor: Editor; manu
       ordered: e.isActive("orderedList"),
       inList: e.isActive("listItem"),
       quote: e.isActive("blockquote"),
+      inTable: e.isActive("table"),
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
     }),
@@ -185,6 +189,31 @@ export function FormatBar({ editor, manuscript, onFind }: { editor: Editor; manu
       {icon}
     </button>
   );
+
+  const insertImage = async () => {
+    const file = await openFile({ filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }] });
+    if (typeof file !== "string") return;
+    const asset = await api.importAsset(file);
+    chain().insertContent({ type: "image", attrs: { asset, alt: "" } }).run();
+  };
+  const insertFootnote = async () => {
+    const text = await askText({ title: "Footnote", placeholder: "The note's text", confirm: "Add footnote" });
+    if (text) chain().insertFootnote(text).run();
+  };
+  const tableMenu = (e: React.MouseEvent) =>
+    openMenu(e, [
+      { label: "Add row above", onClick: () => chain().addRowBefore().run() },
+      { label: "Add row below", onClick: () => chain().addRowAfter().run() },
+      { label: "Add column left", onClick: () => chain().addColumnBefore().run() },
+      { label: "Add column right", onClick: () => chain().addColumnAfter().run() },
+      "separator",
+      { label: "Header row on/off", onClick: () => chain().toggleHeaderRow().run() },
+      { label: "Merge or split cells", onClick: () => chain().mergeOrSplit().run() },
+      "separator",
+      { label: "Delete row", danger: true, onClick: () => chain().deleteRow().run() },
+      { label: "Delete column", danger: true, onClick: () => chain().deleteColumn().run() },
+      { label: "Delete table", danger: true, onClick: () => chain().deleteTable().run() },
+    ]);
 
   const alignIcon = { left: <AlignLeft size={15} />, center: <AlignCenter size={15} />, right: <AlignRight size={15} />, justify: <AlignJustify size={15} /> }[s.align];
 
@@ -218,6 +247,18 @@ export function FormatBar({ editor, manuscript, onFind }: { editor: Editor; manu
       {s.inList && btn(false, "Outdent list item (Shift+Tab)", () => chain().liftListItem("listItem").run(), <IndentDecrease size={15} />)}
       {btn(s.quote, "Quote (Ctrl+Shift+B)", () => chain().toggleBlockquote().run(), <Quote size={15} />)}
       {btn(false, "Scene break", () => chain().setHorizontalRule().run(), <Minus size={15} />)}
+      {btn(
+        false,
+        "Insert",
+        (e) =>
+          openMenu(e, [
+            { label: "Image…", icon: <ImagePlus size={14} />, onClick: insertImage },
+            { label: "Table", icon: <Table2 size={14} />, onClick: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+            { label: "Footnote…", icon: <Asterisk size={14} />, shortcut: "Ctrl Alt F", onClick: insertFootnote },
+          ]),
+        <Plus size={15} />,
+      )}
+      {s.inTable && btn(true, "Table", tableMenu, <Table2 size={15} />)}
       {btn(
         s.sub || s.sup,
         "More",

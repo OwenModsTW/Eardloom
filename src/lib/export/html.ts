@@ -8,11 +8,16 @@ export interface HtmlOptions {
   mention: (node: JSONContent) => string;
   /** Added to heading levels, so headings sit below the page's own title. */
   headingOffset: number;
+  /** Where a world image is found; images are left out without it. */
+  image?: (asset: string) => string | null;
+  /** Renders a footnote marker (and remembers the note); footnotes are left out without it. */
+  footnote?: (text: string) => string;
 }
 
 function inline(n: JSONContent, o: HtmlOptions): string {
   if (n.type === "hardBreak") return "<br/>";
   if (n.type === "mention") return o.mention(n);
+  if (n.type === "footnote") return o.footnote ? o.footnote(String(n.attrs?.text ?? "")) : "";
   let html = esc(n.text ?? "");
   for (const m of n.marks ?? []) {
     if (m.type === "bold") html = `<strong>${html}</strong>`;
@@ -64,6 +69,20 @@ export function docToHtml(n: JSONContent | null | undefined, o: HtmlOptions): st
       return `<pre>${esc((n.content ?? []).map((c) => c.text ?? "").join(""))}</pre>`;
     case "horizontalRule":
       return `<hr/>`;
+    case "image": {
+      const src = typeof n.attrs?.asset === "string" ? o.image?.(n.attrs.asset) : null;
+      return src ? `<p class="image"><img src="${esc(src)}" alt="${esc(String(n.attrs?.alt ?? ""))}"/></p>` : "";
+    }
+    case "table":
+      return `<table>${kids()}</table>`;
+    case "tableRow":
+      return `<tr>${kids()}</tr>`;
+    case "tableHeader":
+    case "tableCell": {
+      const tag = n.type === "tableHeader" ? "th" : "td";
+      const span = (k: string) => (Number(n.attrs?.[k]) > 1 ? ` ${k}="${Number(n.attrs![k])}"` : "");
+      return `<${tag}${span("colspan")}${span("rowspan")}>${kids()}</${tag}>`;
+    }
     default:
       return n.content ? kids() : "";
   }

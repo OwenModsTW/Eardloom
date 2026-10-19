@@ -9,6 +9,8 @@ interface Request {
   confirm?: string;
   /** Suggestions shown under the box (e.g. existing tags). */
   suggestions?: string[];
+  /** An empty answer is allowed (and resolves to ""). */
+  allowEmpty?: boolean;
   resolve: (value: string | null) => void;
 }
 
@@ -30,7 +32,7 @@ export function PromptHost() {
 
   const done = (v: string | null) => {
     usePrompt.setState({ request: null });
-    request.resolve(v === null ? null : v.trim() || null);
+    request.resolve(v === null ? null : v.trim() || (request.allowEmpty ? "" : null));
   };
   const q = value.trim().toLowerCase();
   const suggestions = (request.suggestions ?? []).filter((s) => !q || s.toLowerCase().includes(q)).slice(0, 8);
@@ -72,7 +74,7 @@ export function PromptHost() {
           <button type="button" className="ghost" onClick={() => done(null)}>
             Cancel
           </button>
-          <button type="submit" className="primary" disabled={!value.trim()}>
+          <button type="submit" className="primary" disabled={!value.trim() && !request.allowEmpty}>
             {request.confirm ?? "OK"}
           </button>
         </footer>

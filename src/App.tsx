@@ -7,7 +7,15 @@ import { Home } from "./components/Home";
 import { Shell } from "./components/Shell";
 import { UpdateBanner, UpdatePrompt } from "./components/UpdateBanner";
 import { WhatsNew } from "./components/WhatsNew";
-import { PromptHost } from "./components/Prompt";
+import { askText, PromptHost } from "./components/Prompt";
+import { onEditFootnote } from "./lib/editor/blocks";
+
+// Clicking a footnote marker edits its note; clearing the text removes it.
+onEditFootnote((text) =>
+  text
+    ? askText({ title: "Footnote", initial: text, label: "Clear the text to remove this footnote.", confirm: "Save", allowEmpty: true })
+    : askText({ title: "Footnote", placeholder: "The note's text", confirm: "Add footnote" }),
+);
 import { ContextMenuHost } from "./components/ContextMenu";
 import { AiProposals } from "./components/AiProposals";
 import { syncAiPrivacy } from "./components/AiSettings";

@@ -48,8 +48,25 @@ fn strip_private(conn: &Connection) -> CmdResult<HashSet<String>> {
         let rows = stmt.query_map([], |r| r.get::<_, String>(0)).map_err(err)?;
         rows.collect::<Result<_, _>>().map_err(err)
     };
-    let private_images = images("SELECT image FROM entries WHERE visibility = 'private' AND image IS NOT NULL")?;
-    let public_images = images("SELECT image FROM entries WHERE visibility != 'private' AND image IS NOT NULL")?;
+    // Images placed inside articles and paragraph fields count too.
+    let in_text = |sql: &str| -> CmdResult<HashSet<String>> {
+        let mut stmt = conn.prepare(sql).map_err(err)?;
+        let rows = stmt.query_map([], |r| r.get::<_, Option<String>>(0)).map_err(err)?;
+        let mut out = HashSet::new();
+        for text in rows.flatten().flatten() {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                images_in(&v, &mut out);
+            }
+        }
+        Ok(out)
+    };
+    let mut private_images = images("SELECT image FROM entries WHERE visibility = 'private' AND image IS NOT NULL")?;
+    private_images.extend(in_text("SELECT body FROM entries WHERE visibility = 'private'")?);
+    private_images.extend(in_text("SELECT fields FROM entries WHERE visibility = 'private'")?);
+    let mut public_images = images("SELECT image FROM entries WHERE visibility != 'private' AND image IS NOT NULL")?;
+    public_images.extend(in_text("SELECT body FROM entries WHERE visibility != 'private'")?);
+    public_images.extend(in_text("SELECT fields FROM entries WHERE visibility != 'private'")?);
+    public_images.extend(in_text("SELECT body FROM docs")?);
     conn.execute_batch(
         "DELETE FROM links WHERE (source_kind = 'entry' AND source_id IN (SELECT id FROM entries WHERE visibility = 'private'))
             OR target_id IN (SELECT id FROM entries WHERE visibility = 'private');
@@ -58,6 +75,22 @@ fn strip_private(conn: &Connection) -> CmdResult<HashSet<String>> {
     )
     .map_err(err)?;
     Ok(private_images.difference(&public_images).cloned().collect())
+}
+
+/// World images placed in a document (`{"type": "image", "attrs": {"asset": ...}}`).
+fn images_in(v: &serde_json::Value, out: &mut HashSet<String>) {
+    match v {
+        serde_json::Value::Array(items) => items.iter().for_each(|i| images_in(i, out)),
+        serde_json::Value::Object(map) => {
+            if map.get("type").and_then(|t| t.as_str()) == Some("image") {
+                if let Some(asset) = map.get("attrs").and_then(|a| a.get("asset")).and_then(|a| a.as_str()) {
+                    out.insert(asset.to_string());
+                }
+            }
+            map.values().for_each(|x| images_in(x, out));
+        }
+        _ => {}
+    }
 }
 
 /// A consistent copy of the world's database, even while the app keeps writing.
@@ -251,11 +284,15 @@ mod tests {
                ('a', 't', 'Public hero', 'shared.png', 'public'),
                ('b', 't', 'Secret villain', 'secret.png', 'private'),
                ('c', 't', 'Also secret', 'shared.png', 'private');
+             UPDATE entries SET body = '{\"type\":\"doc\",\"content\":[{\"type\":\"image\",\"attrs\":{\"asset\":\"diary.png\"}}]}' WHERE id = 'b';
+             UPDATE entries SET body = '{\"type\":\"doc\",\"content\":[{\"type\":\"image\",\"attrs\":{\"asset\":\"map.png\"}}]}' WHERE id = 'a';
+             UPDATE entries SET fields = '{\"f\":{\"type\":\"doc\",\"content\":[{\"type\":\"image\",\"attrs\":{\"asset\":\"map.png\"}}]}}' WHERE id = 'c';
              INSERT INTO links (source_kind, source_id, target_id, via) VALUES ('entry', 'a', 'b', 'mention');",
         )
         .unwrap();
         let skipped = strip_private(&conn).unwrap();
-        assert_eq!(skipped, HashSet::from(["secret.png".to_string()]));
+        // Article images go with their entry, unless a shared entry uses them too.
+        assert_eq!(skipped, HashSet::from(["secret.png".to_string(), "diary.png".to_string()]));
         let left: i64 = conn.query_row("SELECT COUNT(*) FROM entries", [], |r| r.get(0)).unwrap();
         let links: i64 = conn.query_row("SELECT COUNT(*) FROM links", [], |r| r.get(0)).unwrap();
         assert_eq!((left, links), (1, 0));
