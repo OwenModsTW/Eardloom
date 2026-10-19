@@ -36,6 +36,7 @@ export async function createProject(title: string, kind: Project["kind"] = "book
     title: "Chapter 1",
     synopsis: "",
     status: "",
+    label: "",
     body: null,
     sort: 1,
     wordCount: 0,

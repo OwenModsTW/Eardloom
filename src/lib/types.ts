@@ -157,6 +157,8 @@ export interface DocSummary {
   title: string;
   synopsis: string;
   status: string;
+  /** Id of one of the project's labels, or "". */
+  label: string;
   wordCount: number;
   sort: number;
 }

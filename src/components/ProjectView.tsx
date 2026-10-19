@@ -13,6 +13,8 @@ import { MentionClickContext, RichEditor, type EditorStats } from "./RichEditor"
 import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import { SnapshotPanel } from "./Snapshots";
+import { CardsView, OutlineView, PlanSettingsPanel } from "./Planning";
+import { planOf } from "../lib/plan";
 import { assetUrl } from "./EntryView";
 import { EntryGlyph } from "./EntryIcon";
 import type { Doc, DocSummary, Entry, FieldValue, Project, WorldDate } from "../lib/types";
@@ -83,6 +85,25 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loreId, setLoreId] = useState<string | null>(null);
   const [loreOpen, setLoreOpen] = useState(true);
+  const modeKey = `eardloom.mode.${id}`;
+  const [mode, setModeState] = useState<"write" | "cards" | "outline">(() => {
+    try {
+      const m = localStorage.getItem(modeKey);
+      return m === "cards" || m === "outline" ? m : "write";
+    } catch {
+      return "write";
+    }
+  });
+  const setMode = (m: "write" | "cards" | "outline") => {
+    setModeState(m);
+    try {
+      localStorage.setItem(modeKey, m);
+    } catch {
+      /* per-computer preference */
+    }
+  };
+  const [scope, setScope] = useState<string | null>(null);
+  const [planSettings, setPlanSettings] = useState(false);
   const [drag, setDrag] = useState<string | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -128,6 +149,18 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   if (!project) return <p className="page-note">This project no longer exists.</p>;
 
   const settings = project.settings as { targets?: Record<string, number>; bookTarget?: number };
+  const plan = planOf(project);
+  const patchDoc = (docId: string, patch: Partial<DocSummary>) => setDocs((ds) => ds.map((d) => (d.id === docId ? { ...d, ...patch } : d)));
+  const planProps = {
+    project,
+    docs,
+    scope,
+    setScope,
+    patchDoc,
+    openDoc: (docId: string) => (setMode("write"), open(docId)),
+    addDoc: (kind: "text" | "folder", parentId: string | null) => add(kind, undefined, parentId),
+    reload,
+  };
   const saveSettings = async (patch: Partial<typeof settings>) => {
     await api.saveProject({ ...project, settings: { ...project.settings, ...patch } });
     await refreshProjects();
@@ -141,10 +174,10 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
 
   const open = (doc: string) => go({ view: "project", id, docId: doc });
 
-  const add = async (kind: "text" | "folder", near?: DocSummary) => {
+  const add = async (kind: "text" | "folder", near?: DocSummary, inParent?: string | null) => {
     const anchor = near ?? docs.find((d) => d.id === activeId);
-    // New items go inside a folder, or next to a document.
-    const parentId = anchor?.kind === "folder" ? anchor.id : (anchor?.parentId ?? null);
+    // New items go inside a folder, or next to a document (unless a parent is given).
+    const parentId = inParent !== undefined ? inParent : anchor?.kind === "folder" ? anchor.id : (anchor?.parentId ?? null);
     const siblings = docs.filter((d) => d.parentId === parentId);
     const doc: Doc = {
       id: newId(),
@@ -154,12 +187,14 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       title: kind === "folder" ? "New Folder" : `Chapter ${docs.filter((d) => d.kind === "text").length + 1}`,
       synopsis: "",
       status: "",
+      label: "",
       body: null,
       sort: Math.max(0, ...siblings.map((s) => s.sort)) + 1,
       wordCount: 0,
     };
     await api.saveDoc(doc);
     await reload();
+    if (inParent !== undefined) return;
     if (kind === "text") open(doc.id);
     else setRenaming(doc.id);
   };
@@ -223,7 +258,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             setDrop({ targetId: n.id, where: isFolder && y > 0.3 && y < 0.7 ? "inside" : y < 0.5 ? "before" : "after" });
           }}
           onDrop={(e) => (e.preventDefault(), commitDrop().finally(() => (setDrag(null), setDrop(null))))}
-          onClick={() => (isFolder ? null : open(n.id))}
+          onClick={() => (isFolder ? mode === "cards" && setScope(n.id) : (open(n.id), mode === "cards" && setMode("write")))}
           onContextMenu={(e) =>
             openMenu(e, [
               { label: "New document here", onClick: () => add("text", n) },
@@ -271,6 +306,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               {n.title || "Untitled"}
             </span>
           )}
+          {n.label && <i className="binder-label" style={{ background: plan.labels.find((l) => l.id === n.label)?.color }} />}
           {!isFolder && n.wordCount > 0 && <small>{n.wordCount.toLocaleString()}</small>}
         </div>
         {isFolder && !shut && n.children.map((c) => renderNode(c, depth + 1))}
@@ -305,7 +341,23 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </aside>
 
       <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true), setSnapsOpen(false))}>
-        <main className="manuscript">
+        <main className={`manuscript mode-${mode}`}>
+          {!focusMode && (
+            <div className="mode-bar">
+              <div className="segmented">
+                {(["write", "cards", "outline"] as const).map((m) => (
+                  <button key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)}>
+                    {m === "write" ? "Write" : m === "cards" ? "Cards" : "Outline"}
+                  </button>
+                ))}
+              </div>
+              {mode !== "write" && (
+                <button className="link quiet" onClick={() => setPlanSettings(true)}>
+                  Statuses and labels…
+                </button>
+              )}
+            </div>
+          )}
           <div className="manuscript-tools">
             <button className="icon-btn" onClick={() => setFocusMode(!focusMode)} title={focusMode ? "Leave focus mode (Esc)" : "Focus mode (F11)"}>
               {focusMode ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -325,7 +377,11 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               </button>
             )}
           </div>
-          {activeId ? (
+          {mode === "cards" ? (
+            <CardsView {...planProps} />
+          ) : mode === "outline" ? (
+            <OutlineView {...planProps} />
+          ) : activeId ? (
             <DocEditor
               key={`${activeId}-${editorRev}`}
               id={activeId}
@@ -345,6 +401,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </MentionClickContext.Provider>
 
       {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
+      {planSettings && <PlanSettingsPanel project={project} onClose={() => setPlanSettings(false)} />}
       {snapsOpen && !focusMode && activeId && (
         <SnapshotPanel
           docId={activeId}

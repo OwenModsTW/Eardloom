@@ -56,6 +56,7 @@ pub fn run() {
             writing::rename_snapshot,
             writing::delete_snapshot,
             writing::clipboard_rtf,
+            writing::update_doc_details,
             share::export_world_pack,
             backup::default_backup_dir,
             backup::list_backups,

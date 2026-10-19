@@ -101,6 +101,8 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX snapshots_by_doc ON snapshots(doc_id, created_at);
     "#,
+    // v4: a colour label per manuscript document (e.g. POV, storyline)
+    "ALTER TABLE docs ADD COLUMN label TEXT NOT NULL DEFAULT '';",
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

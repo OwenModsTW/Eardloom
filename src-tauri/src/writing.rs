@@ -29,6 +29,7 @@ pub struct DocSummary {
     pub title: String,
     pub synopsis: String,
     pub status: String,
+    pub label: String,
     pub word_count: i64,
     pub sort: f64,
 }
@@ -43,6 +44,8 @@ pub struct Doc {
     pub title: String,
     pub synopsis: String,
     pub status: String,
+    #[serde(default)]
+    pub label: String,
     pub body: Option<Value>,
     pub sort: f64,
     #[serde(default)]
@@ -124,7 +127,7 @@ pub fn list_docs(state: State<AppState>, project_id: String) -> CmdResult<Vec<Do
         let mut stmt = w
             .conn
             .prepare(
-                "SELECT id, project_id, parent_id, kind, title, synopsis, status, word_count, sort
+                "SELECT id, project_id, parent_id, kind, title, synopsis, status, word_count, sort, label
                    FROM docs WHERE project_id = ?1 ORDER BY sort",
             )
             .map_err(err)?;
@@ -140,6 +143,7 @@ pub fn list_docs(state: State<AppState>, project_id: String) -> CmdResult<Vec<Do
                     status: r.get(6)?,
                     word_count: r.get(7)?,
                     sort: r.get(8)?,
+                    label: r.get(9)?,
                 })
             })
             .map_err(err)?;
@@ -152,7 +156,7 @@ pub fn get_doc(state: State<AppState>, id: String) -> CmdResult<Doc> {
     state.with(|w| {
         w.conn
             .query_row(
-                "SELECT id, project_id, parent_id, kind, title, synopsis, status, body, sort, word_count
+                "SELECT id, project_id, parent_id, kind, title, synopsis, status, body, sort, word_count, label
                    FROM docs WHERE id = ?1",
                 [&id],
                 |r| {
@@ -168,6 +172,7 @@ pub fn get_doc(state: State<AppState>, id: String) -> CmdResult<Doc> {
                         body: body.and_then(|b| serde_json::from_str(&b).ok()),
                         sort: r.get(8)?,
                         word_count: r.get(9)?,
+                        label: r.get(10)?,
                     })
                 },
             )
@@ -183,12 +188,13 @@ pub fn save_doc(state: State<AppState>, doc: Doc) -> CmdResult<i64> {
         let words = db::word_count(&extracted.text);
         let tx = w.conn.unchecked_transaction().map_err(err)?;
         tx.execute(
-            "INSERT INTO docs (id, project_id, parent_id, kind, title, synopsis, status, body, word_count, sort)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO docs (id, project_id, parent_id, kind, title, synopsis, status, body, word_count, sort, label)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(id) DO UPDATE SET
                parent_id = excluded.parent_id, kind = excluded.kind, title = excluded.title,
                synopsis = excluded.synopsis, status = excluded.status, body = excluded.body,
-               word_count = excluded.word_count, sort = excluded.sort, updated_at = datetime('now')",
+               word_count = excluded.word_count, sort = excluded.sort, label = excluded.label,
+               updated_at = datetime('now')",
             params![
                 doc.id,
                 doc.project_id,
@@ -200,6 +206,7 @@ pub fn save_doc(state: State<AppState>, doc: Doc) -> CmdResult<i64> {
                 doc.body.as_ref().map(Value::to_string),
                 words,
                 doc.sort,
+                doc.label,
             ],
         )
         .map_err(err)?;
@@ -451,4 +458,31 @@ pub fn clipboard_rtf() -> Option<String> {
     {
         None
     }
+}
+
+
+/// Card details only: title, synopsis, status and label, without touching the text.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocDetails {
+    pub title: Option<String>,
+    pub synopsis: Option<String>,
+    pub status: Option<String>,
+    pub label: Option<String>,
+}
+
+#[tauri::command]
+pub fn update_doc_details(state: State<AppState>, id: String, details: DocDetails) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute(
+                "UPDATE docs SET
+                   title = COALESCE(?2, title), synopsis = COALESCE(?3, synopsis),
+                   status = COALESCE(?4, status), label = COALESCE(?5, label)
+                 WHERE id = ?1",
+                params![id, details.title, details.synopsis, details.status, details.label],
+            )
+            .map(|_| ())
+            .map_err(err)
+    })
 }

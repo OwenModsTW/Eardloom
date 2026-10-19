@@ -49,6 +49,8 @@ export const api = {
   moveDocs: (positions: { id: string; parentId: string | null; sort: number }[]) =>
     invoke<void>("move_docs", { positions }),
   deleteDoc: (id: string) => invoke<void>("delete_doc", { id }),
+  updateDocDetails: (id: string, details: { title?: string; synopsis?: string; status?: string; label?: string }) =>
+    invoke<void>("update_doc_details", { id, details }),
   createSnapshot: (docId: string, name: string, automatic = false) =>
     invoke<void>("create_snapshot", { id: crypto.randomUUID(), docId, name, automatic }),
   listSnapshots: (docId: string) =>
