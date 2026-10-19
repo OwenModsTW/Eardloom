@@ -1169,3 +1169,23 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .flow-title .link { color: var(--text-soft); font: inherit; }
 .flow-title .link:hover { color: var(--accent); }
 .flow-placeholder { background: repeating-linear-gradient(transparent 0 20px, var(--line) 20px 21px, transparent 21px 28px); opacity: 0.35; border-radius: var(--r); }
+
+/* ---------- relationships & family trees ---------- */
+.relation-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.relation-row label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.relation-row input { width: 180px; height: 26px; }
+.reverse-links .chip-label { font-size: 13.5px; }
+.dialog.family { width: min(1100px, 95vw); height: 82vh; display: flex; flex-direction: column; }
+.family-body { flex: 1; min-height: 0; overflow: auto; background: var(--bg-side); }
+.family-note { padding: 18px 24px 0; max-width: 640px; }
+.family-canvas { position: relative; margin: 0 auto; }
+.family-canvas svg { position: absolute; inset: 0; pointer-events: none; }
+.family-line { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
+.family-partner { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.family-row-name { position: absolute; left: 24px; font: 600 10.5px var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.family-card { position: absolute; display: flex; align-items: center; background: var(--bg-raised); border: 1px solid var(--line-strong); border-radius: var(--r); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); }
+.family-card.focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.family-main { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 10px; text-align: left; font: 600 13.5px var(--serif); }
+.family-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.family-open { opacity: 0; margin-right: 4px; }
+.family-card:hover .family-open { opacity: 1; }

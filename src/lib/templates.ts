@@ -1,4 +1,4 @@
-import type { EntryType, FieldDef, FieldKind } from "./types";
+import type { EntryType, FamilyRole, FieldDef, FieldKind } from "./types";
 import { newId } from "./api";
 
 /**
@@ -8,7 +8,7 @@ import { newId } from "./api";
  * A field spec is [label, kind, extra?]. For entry/entries fields, `to` lists the
  * names of the template types that may be linked, resolved to ids on creation.
  */
-type FieldSpec = [string, FieldKind, { options?: string[]; to?: string[]; section?: string }?];
+type FieldSpec = [string, FieldKind, { options?: string[]; to?: string[]; section?: string; inverse?: string; family?: FamilyRole }?];
 
 interface TypeSpec {
   name: string;
@@ -46,25 +46,26 @@ export const TEMPLATES: WorldTemplate[] = [
       {
         name: "Character", plural: "Characters", icon: "User", color: "#e0a458",
         fields: [
-          ["Species", "entry", { to: ["Species"] }],
+          ["Species", "entry", { to: ["Species"], inverse: "Members" }],
           ["Gender", "text"],
           ["Age", "text"],
           ["Occupation", "text"],
           ["Status", "select", { options: STATUS }],
           ["Born", "worlddate"],
-          ["Birthplace", "entry", { to: ["Location"] }],
-          ["Affiliations", "entries", { to: ["Faction"], section: "Relationships" }],
-          ["Allies", "entries", { to: ["Character"], section: "Relationships" }],
-          ["Enemies", "entries", { to: ["Character"], section: "Relationships" }],
-          ["Family", "entries", { to: ["Character"], section: "Relationships" }],
+          ["Birthplace", "entry", { to: ["Location"], inverse: "Born here" }],
+          ["Affiliations", "entries", { to: ["Faction"], section: "Relationships", inverse: "Members" }],
+          ["Allies", "entries", { to: ["Character"], section: "Relationships", inverse: "Allies" }],
+          ["Enemies", "entries", { to: ["Character"], section: "Relationships", inverse: "Enemies" }],
+          ["Parents", "entries", { to: ["Character"], section: "Family", family: "parents", inverse: "Children" }],
+          ["Partners", "entries", { to: ["Character"], section: "Family", family: "partners", inverse: "Partners" }],
         ],
       },
       {
         name: "Location", plural: "Locations", icon: "Castle", color: "#6fb58a",
         fields: [
           ["Kind", "select", { options: ["Continent", "Region", "Kingdom", "City", "Town", "Village", "Landmark", "Dungeon", "Building"] }],
-          ["Part of", "entry", { to: ["Location"] }],
-          ["Ruler", "entry", { to: ["Character"] }],
+          ["Part of", "entry", { to: ["Location"], inverse: "Contains" }],
+          ["Ruler", "entry", { to: ["Character"], inverse: "Rules" }],
           ["Population", "number"],
           ["Climate", "text"],
         ],
@@ -73,14 +74,14 @@ export const TEMPLATES: WorldTemplate[] = [
         name: "Faction", plural: "Factions", icon: "Shield", color: "#c96d6d",
         fields: [
           ["Kind", "select", { options: ["Kingdom", "Guild", "Order", "Cult", "Clan", "Company", "Other"] }],
-          ["Leader", "entry", { to: ["Character"] }],
-          ["Headquarters", "entry", { to: ["Location"] }],
+          ["Leader", "entry", { to: ["Character"], inverse: "Leads" }],
+          ["Headquarters", "entry", { to: ["Location"], inverse: "Headquarters of" }],
           ["Goals", "longtext"],
         ],
       },
       {
         name: "Species", plural: "Species", icon: "PawPrint", color: "#9b8bd4",
-        fields: [["Lifespan", "text"], ["Homeland", "entry", { to: ["Location"] }], ["Traits", "list"]],
+        fields: [["Lifespan", "text"], ["Homeland", "entry", { to: ["Location"], inverse: "Home of" }], ["Traits", "list"]],
       },
       {
         name: "Magic", plural: "Magic", icon: "Sparkles", color: "#5fb0c9",
@@ -88,15 +89,15 @@ export const TEMPLATES: WorldTemplate[] = [
       },
       {
         name: "Item", plural: "Items", icon: "Gem", color: "#d4b45f",
-        fields: [["Kind", "text"], ["Owner", "entry", { to: ["Character"] }], ["Powers", "longtext"]],
+        fields: [["Kind", "text"], ["Owner", "entry", { to: ["Character"], inverse: "Owns" }], ["Powers", "longtext"]],
       },
       {
         name: "Deity", plural: "Deities", icon: "Sun", color: "#e6c86e",
-        fields: [["Domains", "list"], ["Pantheon", "text"], ["Worshipped by", "entries", { to: ["Faction", "Species"] }]],
+        fields: [["Domains", "list"], ["Pantheon", "text"], ["Worshipped by", "entries", { to: ["Faction", "Species"], inverse: "Worships" }]],
       },
       {
         name: "Event", plural: "Events", icon: "CalendarDays", color: "#b07fc9",
-        fields: [["Date", "worlddate"], ["Where", "entries", { to: ["Location"] }], ["Participants", "entries"]],
+        fields: [["Date", "worlddate"], ["Where", "entries", { to: ["Location"], inverse: "Events here" }], ["Participants", "entries", { inverse: "Took part in" }]],
       },
       { name: "Lore", plural: "Lore", icon: "ScrollText", color: "#8b9bb4", fields: [] },
     ],
@@ -109,26 +110,28 @@ export const TEMPLATES: WorldTemplate[] = [
       {
         name: "Character", plural: "Characters", icon: "User", color: "#e0a458",
         fields: [
-          ["Species", "entry", { to: ["Species"] }],
+          ["Species", "entry", { to: ["Species"], inverse: "Members" }],
           ["Rank / Role", "text"],
-          ["Homeworld", "entry", { to: ["Celestial Body"] }],
+          ["Homeworld", "entry", { to: ["Celestial Body"], inverse: "Home of" }],
           ["Status", "select", { options: STATUS }],
           ["Born", "worlddate"],
           ["Augmentations", "list"],
-          ["Affiliations", "entries", { to: ["Faction"], section: "Relationships" }],
-          ["Allies", "entries", { to: ["Character"], section: "Relationships" }],
-          ["Enemies", "entries", { to: ["Character"], section: "Relationships" }],
+          ["Affiliations", "entries", { to: ["Faction"], section: "Relationships", inverse: "Members" }],
+          ["Allies", "entries", { to: ["Character"], section: "Relationships", inverse: "Allies" }],
+          ["Enemies", "entries", { to: ["Character"], section: "Relationships", inverse: "Enemies" }],
+          ["Parents", "entries", { to: ["Character"], section: "Family", family: "parents", inverse: "Children" }],
+          ["Partners", "entries", { to: ["Character"], section: "Family", family: "partners", inverse: "Partners" }],
         ],
       },
       {
         name: "Star System", plural: "Star Systems", icon: "Orbit", color: "#e6c86e",
-        fields: [["Star Class", "text"], ["Controlled by", "entry", { to: ["Faction"] }], ["Sector", "text"]],
+        fields: [["Star Class", "text"], ["Controlled by", "entry", { to: ["Faction"], inverse: "Controls" }], ["Sector", "text"]],
       },
       {
         name: "Celestial Body", plural: "Celestial Bodies", icon: "Globe", color: "#6fb58a",
         fields: [
           ["Kind", "select", { options: ["Planet", "Moon", "Star", "Gas Giant", "Asteroid", "Station", "Megastructure"] }],
-          ["System", "entry", { to: ["Star System"] }],
+          ["System", "entry", { to: ["Star System"], inverse: "Bodies" }],
           ["Population", "number"],
           ["Atmosphere", "text"],
           ["Gravity", "text"],
@@ -138,9 +141,9 @@ export const TEMPLATES: WorldTemplate[] = [
         name: "Starship", plural: "Starships", icon: "Rocket", color: "#5fb0c9",
         fields: [
           ["Class", "text"],
-          ["Manufacturer", "entry", { to: ["Faction"] }],
-          ["Captain", "entry", { to: ["Character"] }],
-          ["Crew", "entries", { to: ["Character"] }],
+          ["Manufacturer", "entry", { to: ["Faction"], inverse: "Built" }],
+          ["Captain", "entry", { to: ["Character"], inverse: "Captain of" }],
+          ["Crew", "entries", { to: ["Character"], inverse: "Crew of" }],
           ["FTL", "boolean"],
           ["Armament", "list"],
         ],
@@ -149,22 +152,22 @@ export const TEMPLATES: WorldTemplate[] = [
         name: "Faction", plural: "Factions", icon: "Building2", color: "#c96d6d",
         fields: [
           ["Kind", "select", { options: ["Government", "Corporation", "Military", "Rebellion", "Religion", "Syndicate", "Other"] }],
-          ["Leader", "entry", { to: ["Character"] }],
-          ["Headquarters", "entry", { to: ["Celestial Body"] }],
+          ["Leader", "entry", { to: ["Character"], inverse: "Leads" }],
+          ["Headquarters", "entry", { to: ["Celestial Body"], inverse: "Headquarters of" }],
           ["Goals", "longtext"],
         ],
       },
       {
         name: "Species", plural: "Species", icon: "Dna", color: "#9b8bd4",
-        fields: [["Homeworld", "entry", { to: ["Celestial Body"] }], ["Lifespan", "text"], ["Traits", "list"]],
+        fields: [["Homeworld", "entry", { to: ["Celestial Body"], inverse: "Home of" }], ["Lifespan", "text"], ["Traits", "list"]],
       },
       {
         name: "Technology", plural: "Technology", icon: "Cpu", color: "#7fa7d9",
-        fields: [["Tech Level", "text"], ["Developed by", "entry", { to: ["Faction", "Character"] }], ["Applications", "longtext"]],
+        fields: [["Tech Level", "text"], ["Developed by", "entry", { to: ["Faction", "Character"], inverse: "Developed" }], ["Applications", "longtext"]],
       },
       {
         name: "Event", plural: "Events", icon: "CalendarDays", color: "#b07fc9",
-        fields: [["Date", "worlddate"], ["Where", "entries"], ["Participants", "entries"]],
+        fields: [["Date", "worlddate"], ["Where", "entries", { inverse: "Events here" }], ["Participants", "entries", { inverse: "Took part in" }]],
       },
       { name: "Lore", plural: "Lore", icon: "ScrollText", color: "#8b9bb4", fields: [] },
     ],
@@ -181,17 +184,17 @@ export const TEMPLATES: WorldTemplate[] = [
           ["Before the fall", "text"],
           ["Status", "select", { options: ["Alive", "Infected", "Dead", "Missing"] }],
           ["Skills", "list"],
-          ["Group", "entry", { to: ["Group"] }],
+          ["Group", "entry", { to: ["Group"], inverse: "Members" }],
           ["Days survived", "number"],
-          ["Trusts", "entries", { to: ["Survivor"], section: "Relationships" }],
-          ["Distrusts", "entries", { to: ["Survivor"], section: "Relationships" }],
+          ["Trusts", "entries", { to: ["Survivor"], section: "Relationships", inverse: "Trusted by" }],
+          ["Distrusts", "entries", { to: ["Survivor"], section: "Relationships", inverse: "Distrusted by" }],
         ],
       },
       {
         name: "Group", plural: "Groups", icon: "Users", color: "#c96d6d",
         fields: [
-          ["Leader", "entry", { to: ["Survivor"] }],
-          ["Base", "entry", { to: ["Location"] }],
+          ["Leader", "entry", { to: ["Survivor"], inverse: "Leads" }],
+          ["Base", "entry", { to: ["Location"], inverse: "Base of" }],
           ["Size", "number"],
           ["Disposition", "select", { options: ["Friendly", "Neutral", "Wary", "Hostile"] }],
         ],
@@ -201,7 +204,7 @@ export const TEMPLATES: WorldTemplate[] = [
         fields: [
           ["Kind", "select", { options: ["Safehouse", "Settlement", "Outpost", "Ruins", "Dead Zone", "Landmark"] }],
           ["Danger", "select", { options: ["Safe", "Low", "Moderate", "High", "Lethal"] }],
-          ["Controlled by", "entry", { to: ["Group"] }],
+          ["Controlled by", "entry", { to: ["Group"], inverse: "Controls" }],
           ["Resources", "list"],
         ],
       },
@@ -216,11 +219,11 @@ export const TEMPLATES: WorldTemplate[] = [
       },
       {
         name: "Supply", plural: "Supplies", icon: "Package", color: "#d4b45f",
-        fields: [["Kind", "text"], ["Rarity", "select", { options: ["Common", "Scarce", "Rare", "Unique"] }], ["Held by", "entry"]],
+        fields: [["Kind", "text"], ["Rarity", "select", { options: ["Common", "Scarce", "Rare", "Unique"] }], ["Held by", "entry", { inverse: "Holds" }]],
       },
       {
         name: "Event", plural: "Events", icon: "CalendarDays", color: "#b07fc9",
-        fields: [["Day", "text"], ["Where", "entries", { to: ["Location"] }], ["Involved", "entries"]],
+        fields: [["Day", "text"], ["Where", "entries", { to: ["Location"], inverse: "Events here" }], ["Involved", "entries", { inverse: "Involved in" }]],
       },
     ],
   },
@@ -234,15 +237,17 @@ export const TEMPLATES: WorldTemplate[] = [
         fields: [
           ["Age", "text"],
           ["Occupation", "text"],
-          ["Lives in", "entry", { to: ["Place"] }],
-          ["Works for", "entry", { to: ["Organization"] }],
-          ["Relationships", "entries", { to: ["Character"] }],
+          ["Lives in", "entry", { to: ["Place"], inverse: "Residents" }],
+          ["Works for", "entry", { to: ["Organization"], inverse: "People" }],
+          ["Relationships", "entries", { to: ["Character"], inverse: "Relationships" }],
+          ["Parents", "entries", { to: ["Character"], section: "Family", family: "parents", inverse: "Children" }],
+          ["Partners", "entries", { to: ["Character"], section: "Family", family: "partners", inverse: "Partners" }],
         ],
       },
-      { name: "Place", plural: "Places", icon: "MapPin", color: "#6fb58a", fields: [["Address / Area", "text"], ["Part of", "entry", { to: ["Place"] }]] },
-      { name: "Organization", plural: "Organizations", icon: "Building2", color: "#c96d6d", fields: [["Kind", "text"], ["Head", "entry", { to: ["Character"] }]] },
-      { name: "Event", plural: "Events", icon: "CalendarDays", color: "#b07fc9", fields: [["Date", "worlddate"], ["Involved", "entries"]] },
-      { name: "Item", plural: "Items", icon: "Package", color: "#d4b45f", fields: [["Owner", "entry", { to: ["Character"] }]] },
+      { name: "Place", plural: "Places", icon: "MapPin", color: "#6fb58a", fields: [["Address / Area", "text"], ["Part of", "entry", { to: ["Place"], inverse: "Contains" }]] },
+      { name: "Organization", plural: "Organizations", icon: "Building2", color: "#c96d6d", fields: [["Kind", "text"], ["Head", "entry", { to: ["Character"], inverse: "Heads" }]] },
+      { name: "Event", plural: "Events", icon: "CalendarDays", color: "#b07fc9", fields: [["Date", "worlddate"], ["Involved", "entries", { inverse: "Involved in" }]] },
+      { name: "Item", plural: "Items", icon: "Package", color: "#d4b45f", fields: [["Owner", "entry", { to: ["Character"], inverse: "Owns" }]] },
     ],
   },
   {
@@ -257,14 +262,14 @@ export const TEMPLATES: WorldTemplate[] = [
           ["Class", "text"],
           ["Level", "number"],
           ["Alignment", "select", { options: ["LG", "NG", "CG", "LN", "N", "CN", "LE", "NE", "CE"] }],
-          ["Location", "entry", { to: ["Location"] }],
-          ["Faction", "entry", { to: ["Faction"] }],
+          ["Location", "entry", { to: ["Location"], inverse: "NPCs here" }],
+          ["Faction", "entry", { to: ["Faction"], inverse: "Members" }],
           ["Armor Class", "number", { section: "Stats" }],
           ["Hit Points", "number", { section: "Stats" }],
         ],
       },
-      { name: "Location", plural: "Locations", icon: "Castle", color: "#6fb58a", fields: [["Kind", "text"], ["Part of", "entry", { to: ["Location"] }]] },
-      { name: "Faction", plural: "Factions", icon: "Shield", color: "#c96d6d", fields: [["Leader", "entry", { to: ["NPC"] }], ["Goals", "longtext"]] },
+      { name: "Location", plural: "Locations", icon: "Castle", color: "#6fb58a", fields: [["Kind", "text"], ["Part of", "entry", { to: ["Location"], inverse: "Contains" }]] },
+      { name: "Faction", plural: "Factions", icon: "Shield", color: "#c96d6d", fields: [["Leader", "entry", { to: ["NPC"], inverse: "Leads" }], ["Goals", "longtext"]] },
       {
         name: "Monster", plural: "Monsters", icon: "Skull", color: "#9bb46f",
         fields: [
@@ -281,7 +286,7 @@ export const TEMPLATES: WorldTemplate[] = [
       },
       {
         name: "Quest", plural: "Quests", icon: "Flag", color: "#5fb0c9",
-        fields: [["Status", "select", { options: ["Rumoured", "Active", "Completed", "Failed"] }], ["Given by", "entry", { to: ["NPC"] }], ["Reward", "text"]],
+        fields: [["Status", "select", { options: ["Rumoured", "Active", "Completed", "Failed"] }], ["Given by", "entry", { to: ["NPC"], inverse: "Quests given" }], ["Reward", "text"]],
       },
       {
         name: "Session", plural: "Sessions", icon: "Dices", color: "#b07fc9",
@@ -309,6 +314,8 @@ export function instantiateTemplate(template: WorldTemplate): EntryType[] {
       ...(extra?.options ? { options: extra.options } : {}),
       ...(extra?.to ? { targetTypes: extra.to.map((n) => ids.get(n)).filter((x): x is string => !!x) } : {}),
       ...(extra?.section ? { section: extra.section } : {}),
+      ...(extra?.inverse ? { inverse: extra.inverse } : {}),
+      ...(extra?.family ? { family: extra.family } : {}),
     })),
   }));
 }

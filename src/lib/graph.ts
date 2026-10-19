@@ -1,9 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GraphEdge, GraphNode } from "../components/GraphCanvas";
-import type { EntrySummary, EntryType } from "./types";
+import type { EntrySummary, EntryType, FieldDef } from "./types";
+import { fieldsById, relationLabel } from "./relations";
 
 export interface GraphData {
-  links: { sourceKind: "entry" | "doc"; sourceId: string; targetId: string }[];
+  links: { sourceKind: "entry" | "doc"; sourceId: string; targetId: string; via: string }[];
   docs: { id: string; projectId: string; title: string }[];
 }
 
@@ -22,18 +23,20 @@ export function buildGraph(data: GraphData, entries: EntrySummary[], types: Entr
   const visibleEntry = new Map(entries.filter((e) => !o.hiddenTypes?.has(e.typeId)).map((e) => [e.id, e]));
   const docs = new Map(data.docs.map((d) => [d.id, d]));
 
-  const pairs = new Set<string>();
-  let edges: { s: string; t: string }[] = [];
+  const fields = fieldsById(types);
+  // One line per pair, whichever way round they're linked, carrying every relationship between them.
+  const pairs = new Map<string, { s: string; t: string; rel: { field: FieldDef; fromS: boolean }[] }>();
   for (const l of data.links) {
     if (!visibleEntry.has(l.targetId)) continue;
     if (l.sourceKind === "entry" && !visibleEntry.has(l.sourceId)) continue;
     if (l.sourceKind === "doc" && (!o.includeDocs || !docs.has(l.sourceId))) continue;
-    // One line per pair, whichever way round they're linked.
     const key = [l.sourceId, l.targetId].sort().join("|");
-    if (pairs.has(key)) continue;
-    pairs.add(key);
-    edges.push({ s: l.sourceId, t: l.targetId });
+    if (!pairs.has(key)) pairs.set(key, { s: l.sourceId, t: l.targetId, rel: [] });
+    const pair = pairs.get(key)!;
+    const field = fields.get(l.via);
+    if (field) pair.rel.push({ field, fromS: pair.s === l.sourceId });
   }
+  let edges = [...pairs.values()];
 
   // Local graph: keep only what's within reach of the focused entry.
   let keep: Set<string> | null = null;
@@ -76,6 +79,11 @@ export function buildGraph(data: GraphData, entries: EntrySummary[], types: Entr
     }
 
   const ids = new Set(nodes.map((n) => n.id));
-  const graphEdges: GraphEdge[] = edges.filter((e) => ids.has(e.s) && ids.has(e.t)).map((e) => ({ source: e.s, target: e.t }));
+  // What the other end is to each side: seen from s, t is its "Homeworld"; seen from t, s is a "Native people".
+  const name = (rel: { field: FieldDef; fromS: boolean }[], fromS: boolean) =>
+    [...new Set(rel.map((r) => relationLabel(r.field, r.fromS === fromS)).filter((x): x is string => !!x))].join(", ") || undefined;
+  const graphEdges: GraphEdge[] = edges
+    .filter((e) => ids.has(e.s) && ids.has(e.t))
+    .map((e) => ({ source: e.s, target: e.t, fromSource: name(e.rel, true), fromTarget: name(e.rel, false) }));
   return { nodes, edges: graphEdges, docs };
 }

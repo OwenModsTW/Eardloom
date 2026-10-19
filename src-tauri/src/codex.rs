@@ -407,6 +407,8 @@ pub struct GraphLink {
     pub source_kind: String,
     pub source_id: String,
     pub target_id: String,
+    /// "mention", or the id of the link field (which names the relationship).
+    pub via: String,
 }
 
 #[derive(Serialize)]
@@ -423,21 +425,21 @@ pub struct Graph {
     pub docs: Vec<GraphDoc>,
 }
 
-/// Every link in the world (one per source/target pair), plus the documents that
-/// mention entries, for the graph view.
+/// Every link in the world (one per source, target and kind of link), plus the documents
+/// that mention entries, for the graph view and family trees.
 #[tauri::command]
 pub fn link_graph(state: State<AppState>) -> CmdResult<Graph> {
     state.with(|w| {
         let mut stmt = w
             .conn
             .prepare(
-                "SELECT DISTINCT l.source_kind, l.source_id, l.target_id FROM links l
+                "SELECT DISTINCT l.source_kind, l.source_id, l.target_id, l.via FROM links l
                   WHERE l.target_id IN (SELECT id FROM entries)
                     AND (l.source_kind = 'doc' OR l.source_id IN (SELECT id FROM entries))",
             )
             .map_err(err)?;
         let links = stmt
-            .query_map([], |r| Ok(GraphLink { source_kind: r.get(0)?, source_id: r.get(1)?, target_id: r.get(2)? }))
+            .query_map([], |r| Ok(GraphLink { source_kind: r.get(0)?, source_id: r.get(1)?, target_id: r.get(2)?, via: r.get(3)? }))
             .map_err(err)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(err)?;

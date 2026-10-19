@@ -6,7 +6,8 @@ import { useStore } from "../store";
 import { TYPE_ICONS, TypeIcon } from "../lib/icons";
 import { useAutosave } from "../lib/useAutosave";
 import { Select } from "./Select";
-import type { EntryType, FieldDef, FieldKind } from "../lib/types";
+import type { EntryType, FamilyRole, FieldDef, FieldKind } from "../lib/types";
+import { FAMILY_ROLES } from "../lib/relations";
 
 const KINDS: { kind: FieldKind; label: string }[] = [
   { kind: "text", label: "Short text" },
@@ -222,6 +223,30 @@ function TypeForm({ initial, onDelete }: { initial: EntryType; onDelete: () => v
                   );
                 })}
                 {!f.targetTypes?.length && <small>(anything)</small>}
+              </div>
+            )}
+            {(f.kind === "entry" || f.kind === "entries") && (
+              <div className="field-row-extra relation-row">
+                <label>
+                  <span>On the linked entry, show as</span>
+                  <input
+                    value={f.inverse ?? ""}
+                    placeholder={`e.g. ${f.family ? (FAMILY_ROLES.find((r) => r.value === f.family)?.inverse ?? "") : "Members, Home of, Children"}`}
+                    onChange={(e) => setField(i, { inverse: e.target.value || undefined })}
+                  />
+                </label>
+                <label>
+                  <span>Family tree</span>
+                  <Select
+                    value={f.family ?? ""}
+                    onChange={(v) => {
+                      const family = (v || undefined) as FamilyRole | undefined;
+                      const role = FAMILY_ROLES.find((r) => r.value === family);
+                      setField(i, { family, ...(role && !f.inverse ? { inverse: role.inverse } : {}) });
+                    }}
+                    options={[{ value: "", label: "Not part of it" }, ...FAMILY_ROLES.map((r) => ({ value: r.value, label: `Links ${r.label.toLowerCase()}` }))]}
+                  />
+                </label>
               </div>
             )}
           </div>

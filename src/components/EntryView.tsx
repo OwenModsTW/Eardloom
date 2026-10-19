@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, History, ImagePlus, MoreHorizontal, Pin, Share2, Trash2 } from "lucide-react";
+import { Copy, History, ImagePlus, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -15,6 +15,8 @@ import { ShareCard } from "./ShareCard";
 import { LocalGraph } from "./GraphView";
 import { openMenu, type MenuItem } from "./ContextMenu";
 import { EntryHistory } from "./EntryHistory";
+import { FamilyTree } from "./FamilyTree";
+import { fieldsById } from "../lib/relations";
 import { registerEntryFlush, useEntryRevision } from "../lib/entrySync";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
 
@@ -86,10 +88,12 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
   const [pickingEmoji, setPickingEmoji] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [history, setHistory] = useState(false);
+  const [family, setFamily] = useState(false);
   const types = useStore((s) => s.types);
   const world = useStore((s) => s.world)!;
   const { go, patchEntry } = useStore.getState();
   const type = types.find((t) => t.id === entry.typeId);
+  const inFamilies = type?.fields.some((f) => f.family) ?? false;
 
   const { schedule, flush } = useAutosave(async (e: Entry) => {
     // Keep the entry as it was before the first edit of the session, so it can be restored.
@@ -140,6 +144,7 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
       onClick: () => useStore.getState().togglePin(entry.id),
     },
     { label: "History…", icon: <History size={14} />, onClick: () => (flush(), setHistory(true)) },
+    ...(inFamilies ? [{ label: "Family tree", icon: <Network size={14} />, onClick: () => (flush(), setFamily(true)) }] : []),
     { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
     "separator",
@@ -170,6 +175,11 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
             </span>
             <span className="entry-stamp">Edited {relativeTime(entry.updatedAt)}</span>
             <span className="spacer" />
+            {inFamilies && (
+              <button className="ghost tiny" onClick={() => (flush(), setFamily(true))} title="See this entry's family">
+                <Network size={13} /> Family
+              </button>
+            )}
             <button className="ghost tiny" onClick={() => (flush(), setHistory(true))} title="Earlier versions of this entry">
               <History size={13} /> History
             </button>
@@ -243,6 +253,7 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
             </button>
           )}
           <Infobox type={type} entry={entry} setField={setField} />
+          <ReverseLinks entryId={entry.id} />
           <div className="infobox-foot">
             <span>Visibility</span>
             <Select
@@ -256,7 +267,60 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
       </article>
       {sharing && <ShareCard entry={entry} onClose={() => setSharing(false)} />}
       {history && <EntryHistory entryId={entry.id} flush={flush} onClose={() => setHistory(false)} />}
+      {family && <FamilyTree entryId={entry.id} onClose={() => setFamily(false)} />}
     </MentionClickContext.Provider>
+  );
+}
+
+/**
+ * This entry as other entries' link fields see it, named from this side ("Members", "Children"),
+ * for fields that have a name for the reverse direction.
+ */
+function ReverseLinks({ entryId }: { entryId: string }) {
+  const { types, entries } = useStore();
+  const [links, setLinks] = useState<Backlink[]>([]);
+  const rev = useEntryRevision((s) => s.revs[entryId] ?? 0);
+  const updated = entries.length;
+  useEffect(() => {
+    api.backlinks(entryId).then(setLinks);
+  }, [entryId, rev, updated]);
+  const open = useContext(MentionClickContext);
+
+  const groups = useMemo(() => {
+    const fields = fieldsById(types);
+    const out = new Map<string, Backlink[]>();
+    for (const l of links) {
+      const name = l.sourceKind === "entry" ? fields.get(l.via)?.inverse?.trim() : undefined;
+      if (!name) continue;
+      if (!out.has(name)) out.set(name, []);
+      if (!out.get(name)!.some((x) => x.sourceId === l.sourceId)) out.get(name)!.push(l);
+    }
+    return [...out];
+  }, [links, types]);
+
+  if (!groups.length) return null;
+  return (
+    <section className="infobox-section reverse-links">
+      <h4>Connections</h4>
+      {groups.map(([name, ls]) => (
+        <div key={name} className="infobox-row">
+          <span className="infobox-label">{name}</span>
+          <div className="infobox-value chips">
+            {ls.map((l) => {
+              const e = entries.find((x) => x.id === l.sourceId);
+              const t = types.find((x) => x.id === e?.typeId);
+              return (
+                <span key={l.sourceId} className="chip link" style={{ "--chip": t?.color } as React.CSSProperties}>
+                  <button className="chip-label" onClick={() => open(l.sourceId)}>
+                    {e?.title ?? l.title}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -319,7 +383,7 @@ function Backlinks({ id }: { id: string }) {
     if (l.via === "mention") return "in article";
     for (const t of types) {
       const f = t.fields.find((x) => x.id === l.via);
-      if (f) return f.label.toLowerCase();
+      if (f) return (f.inverse?.trim() || f.label).toLowerCase();
     }
     return "linked";
   };

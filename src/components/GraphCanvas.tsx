@@ -16,6 +16,9 @@ export interface GraphNode extends SimulationNodeDatum {
 export interface GraphEdge extends SimulationLinkDatum<GraphNode> {
   source: string | GraphNode;
   target: string | GraphNode;
+  /** What the target is to the source ("Homeworld"), and the source to the target ("Native people"). */
+  fromSource?: string;
+  fromTarget?: string;
 }
 
 interface Props {
@@ -89,6 +92,30 @@ export function GraphCanvas({ nodes, edges, onOpen, focusId, match = "", compact
         ctx.moveTo(s.x, s.y!);
         ctx.lineTo(t.x, t.y!);
         ctx.stroke();
+      }
+
+      // Relationship names on the hovered entry's links, read from its side.
+      if (h) {
+        ctx.font = `${10.5 / k}px "Source Sans 3 Variable", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const e of edges) {
+          const s = endpoint(e, "source");
+          const t = endpoint(e, "target");
+          if ((s !== h && t !== h) || s.x == null || t.x == null) continue;
+          const text = s === h ? e.fromSource : e.fromTarget;
+          if (!text) continue;
+          // Two thirds of the way out, next to the entry it names.
+          const mx = s === h ? s.x + (t.x - s.x) * 0.62 : t.x + (s.x - t.x) * 0.62;
+          const my = s === h ? s.y! + (t.y! - s.y!) * 0.62 : t.y! + (s.y! - t.y!) * 0.62;
+          const w = ctx.measureText(text).width + 8 / k;
+          ctx.globalAlpha = 0.92;
+          ctx.fillStyle = colors.bg;
+          ctx.fillRect(mx - w / 2, my - 7 / k, w, 14 / k);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = colors.accent;
+          ctx.fillText(text, mx, my);
+        }
       }
 
       // Nodes

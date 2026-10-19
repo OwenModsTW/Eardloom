@@ -26,7 +26,13 @@ export interface FieldDef {
   /** Optional heading the field is grouped under in the infobox. */
   section?: string;
   help?: string;
+  /** For entry / entries: what the link is called from the other end ("Homeworld" -> "Native peoples"). */
+  inverse?: string;
+  /** For entry / entries: the field's part in family trees. */
+  family?: FamilyRole;
 }
+
+export type FamilyRole = "parents" | "children" | "partners" | "siblings";
 
 /** A year in an era (era-relative), optionally narrowed to a month and day. */
 export interface WorldDatePoint {
