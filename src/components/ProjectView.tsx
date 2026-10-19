@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
+  Columns2, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
@@ -15,6 +15,7 @@ import { ExportBook } from "./ExportBook";
 import { SnapshotPanel } from "./Snapshots";
 import { CardsView, OutlineView, PlanSettingsPanel } from "./Planning";
 import { CommentsPanel } from "./Comments";
+import { SplitPane, type SplitTarget } from "./SplitPane";
 import { useActiveEditor } from "../lib/editor/comment";
 import { planOf } from "../lib/plan";
 import { assetUrl } from "./EntryView";
@@ -118,6 +119,44 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const focusedComment = useActiveEditor((s) => s.focusedComment);
   const [snapVersion, setSnapVersion] = useState(0);
   const flushDoc = useRef<() => Promise<void>>(() => Promise.resolve());
+  // The side-by-side pane, remembered per book on this computer.
+  const splitKey = `eardloom.split.${id}`;
+  const [split, setSplitState] = useState<{ open: boolean; target: SplitTarget | null; width: number }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(splitKey) ?? "null");
+      if (saved && typeof saved.width === "number") return saved;
+    } catch {
+      /* fall through */
+    }
+    return { open: false, target: null, width: 45 };
+  });
+  const setSplit = (patch: Partial<typeof split>) =>
+    setSplitState((s) => {
+      const next = { ...s, ...patch };
+      try {
+        localStorage.setItem(splitKey, JSON.stringify(next));
+      } catch {
+        /* per-computer preference */
+      }
+      return next;
+    });
+  const writingRef = useRef<HTMLDivElement>(null);
+  const resize = (e: React.PointerEvent) => {
+    const area = writingRef.current;
+    if (!area) return;
+    e.preventDefault();
+    const move = (ev: PointerEvent) => {
+      const r = area.getBoundingClientRect();
+      setSplitState((s) => ({ ...s, width: Math.min(70, Math.max(25, ((r.right - ev.clientX) / r.width) * 100)) }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setSplit({});
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   const reload = useCallback(() => api.listDocs(id).then(setDocs), [id]);
   const reloadCounts = useCallback(() => api.commentCounts(id).then(setCommentCounts), [id]);
@@ -210,6 +249,19 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   };
 
   const open = (doc: string) => go({ view: "project", id, docId: doc });
+  const showSplit = split.open && mode === "write" && !focusMode;
+  const toggleSplit = () => {
+    // Side by side needs the room, so the lore panel steps aside.
+    if (!split.open) (setLoreOpen(false), setSnapsOpen(false), setCommentsOpen(false));
+    setSplit({ open: !split.open });
+  };
+  const openMention = (entryId: string) => {
+    if (showSplit) return setSplit({ target: { kind: "entry", id: entryId } });
+    setLoreId(entryId);
+    setLoreOpen(true);
+    setSnapsOpen(false);
+    setCommentsOpen(false);
+  };
 
   const add = async (kind: "text" | "folder", near?: DocSummary, inParent?: string | null) => {
     const anchor = near ?? docs.find((d) => d.id === activeId);
@@ -378,7 +430,12 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
         </div>
       </aside>
 
-      <MentionClickContext.Provider value={(entryId) => (setLoreId(entryId), setLoreOpen(true), setSnapsOpen(false), setCommentsOpen(false))}>
+      <div
+        ref={writingRef}
+        className={`writing-area ${showSplit ? "split" : ""}`}
+        style={{ "--split": `${split.width}%` } as React.CSSProperties}
+      >
+      <MentionClickContext.Provider value={openMention}>
         <main className={`manuscript mode-${mode}`}>
           {!focusMode && (
             <div className="mode-bar">
@@ -419,6 +476,11 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
                 <History size={15} />
               </button>
             )}
+            {!focusMode && mode === "write" && (
+              <button className={`icon-btn ${split.open ? "on" : ""}`} onClick={toggleSplit} title="Side by side: open an entry, chapter or map beside this one">
+                <Columns2 size={15} />
+              </button>
+            )}
             {!focusMode && (
               <button className="icon-btn" onClick={() => (setLoreOpen(!loreOpen), setSnapsOpen(false), setCommentsOpen(false))} title="Toggle lore panel">
                 {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
@@ -447,6 +509,31 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
           )}
         </main>
       </MentionClickContext.Provider>
+      {showSplit && (
+        <>
+          <div className="split-resizer" onPointerDown={resize} role="separator" aria-orientation="vertical" title="Drag to resize" />
+          <MentionClickContext.Provider value={(entryId) => setSplit({ target: { kind: "entry", id: entryId } })}>
+            <SplitPane
+              target={split.target}
+              docs={docs}
+              activeDocId={activeId}
+              onChange={(target) => setSplit({ target })}
+              onClose={() => setSplit({ open: false })}
+              renderDoc={(docId) => (
+                <DocEditor
+                  key={docId}
+                  id={docId}
+                  secondary
+                  target={settings.targets?.[docId]}
+                  onTarget={(n) => setDocTarget(docId, n)}
+                  onSaved={(patch) => setDocs((ds) => ds.map((d) => (d.id === patch.id ? { ...d, ...patch } : d)))}
+                />
+              )}
+            />
+          </MentionClickContext.Provider>
+        </>
+      )}
+      </div>
 
       {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
       {commentsOpen && !focusMode && activeId && mode === "write" && (
@@ -492,12 +579,15 @@ function DocEditor({
   onTarget,
   registerFlush,
   onSaved,
+  secondary,
 }: {
   id: string;
   target?: number;
   onTarget: (n: number | undefined) => void;
-  registerFlush: (flush: () => Promise<void>) => void;
+  registerFlush?: (flush: () => Promise<void>) => void;
   onSaved: (patch: Partial<DocSummary> & { id: string }) => void;
+  /** Shown in the side pane: comments, snapshots and assistant suggestions stay with the main chapter. */
+  secondary?: boolean;
 }) {
   const [doc, setDoc] = useState<Doc | null>(null);
   const [stats, setStats] = useState<EditorStats>({ words: 0, characters: 0, selectedWords: 0 });
@@ -509,9 +599,10 @@ function DocEditor({
     const wordCount = await api.saveDoc(d);
     onSaved({ id: d.id, title: d.title, synopsis: d.synopsis, status: d.status, wordCount });
   });
-  useEffect(() => registerFlush(flush), [flush]);
+  useEffect(() => registerFlush?.(flush), [flush]);
   // Lets AI suggestions for this chapter go into the live editor.
   useEffect(() => {
+    if (secondary) return;
     useActiveEditor.setState({ docId: id });
     return () => {
       if (useActiveEditor.getState().docId === id) useActiveEditor.setState({ docId: null });
@@ -549,7 +640,8 @@ function DocEditor({
             content={doc.body}
             className="prose"
             manuscript
-            autofocus
+            secondary={secondary}
+            autofocus={!secondary}
             onStats={setStats}
             onChange={(body) => update({ body })}
           />

@@ -54,7 +54,8 @@ const VISIBILITY: { value: Visibility; label: string; hint: string }[] = [
 /** Entries that already have a version from before this session's first edit. */
 const versionedThisSession = new Set<string>();
 
-export function EntryView({ id }: { id: string }) {
+/** `onOpenEntry` handles clicks on linked entries (otherwise they navigate). */
+export function EntryView({ id, onOpenEntry }: { id: string; onOpenEntry?: (id: string) => void }) {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Bumped when the entry is changed elsewhere (the assistant, restoring a version).
@@ -77,10 +78,10 @@ export function EntryView({ id }: { id: string }) {
 
   if (error) return <p className="page-note">This entry couldn't be opened. {error}</p>;
   if (!entry || entry.id !== id) return null;
-  return <EntryEditor key={`${entry.id}:${loadedRev}`} initial={entry} />;
+  return <EntryEditor key={`${entry.id}:${loadedRev}`} initial={entry} onOpenEntry={onOpenEntry} />;
 }
 
-function EntryEditor({ initial }: { initial: Entry }) {
+function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (id: string) => void }) {
   const [entry, setEntry] = useState(initial);
   const [pickingEmoji, setPickingEmoji] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -153,7 +154,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
   const image = assetUrl(world.assetsPath, entry.image);
 
   return (
-    <MentionClickContext.Provider value={(id) => (flush(), go({ view: "entry", id }))}>
+    <MentionClickContext.Provider value={(id) => (flush(), onOpenEntry ? onOpenEntry(id) : go({ view: "entry", id }))}>
       <article className="entry">
         <div className="entry-main">
           <div className="entry-bar">

@@ -227,13 +227,16 @@ interface Props {
   compact?: boolean;
   /** Long-form writing: typewriter scrolling and paragraph focus become available. */
   manuscript?: boolean;
+  /** A second manuscript editor (side by side): it doesn't become the one comments and suggestions go to. */
+  secondary?: boolean;
   onStats?: (stats: EditorStats) => void;
 }
 
 const countWords = (text: string) => (text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ?? []).length;
 
 /** Rich text with @mentions. Remount with a `key` to load a different document. */
-export function RichEditor({ content, onChange, placeholder, className, autofocus, compact, manuscript, onStats }: Props) {
+export function RichEditor({ content, onChange, placeholder, className, autofocus, compact, manuscript, secondary, onStats }: Props) {
+  const primary = manuscript && !secondary;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onStatsRef = useRef(onStats);
@@ -309,10 +312,10 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
     autofocus: autofocus ? "end" : false,
     onCreate: ({ editor }) => {
       report(editor);
-      if (manuscript) useActiveEditor.setState({ editor });
+      if (primary) useActiveEditor.setState({ editor });
     },
     onDestroy: () => {
-      if (manuscript) useActiveEditor.setState({ editor: null, focusedComment: null });
+      if (primary) useActiveEditor.setState({ editor: null, focusedComment: null });
     },
     onUpdate: ({ editor }) => {
       onChangeRef.current(editor.getJSON(), editor.storage.characterCount.words(), editor.isEmpty);
@@ -352,7 +355,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
       onContextMenu={spellMenu}
       onClick={(e) => {
         const c = (e.target as HTMLElement).closest("[data-comment]") as HTMLElement | null;
-        if (c && manuscript) useActiveEditor.setState({ focusedComment: c.dataset.comment ?? null });
+        if (c && primary) useActiveEditor.setState({ focusedComment: c.dataset.comment ?? null });
       }}
     />
   );
