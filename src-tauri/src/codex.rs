@@ -343,6 +343,10 @@ pub fn backlinks(state: State<AppState>, id: String) -> CmdResult<Vec<Backlink>>
                  SELECT l.source_kind, l.source_id, d.title, d.project_id, l.via
                    FROM links l JOIN docs d ON d.id = l.source_id
                   WHERE l.target_id = ?1 AND l.source_kind = 'doc'
+                 UNION ALL
+                 SELECT l.source_kind, l.source_id, m.title, '', l.via
+                   FROM links l JOIN maps m ON m.id = l.source_id
+                  WHERE l.target_id = ?1 AND l.source_kind = 'map'
                  ORDER BY 1, 3",
             )
             .map_err(err)?;

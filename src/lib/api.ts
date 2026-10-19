@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { JSONContent } from "@tiptap/react";
+import type { WorldMap } from "./maps/model";
 import type {
   Backlink,
   Calendar,
@@ -65,6 +66,10 @@ export const api = {
     invoke<void>("save_comment", { comment: { createdAt: "", ...comment } }),
   deleteComment: (id: string) => invoke<void>("delete_comment", { id }),
   commentCounts: (projectId: string) => invoke<Record<string, number>>("comment_counts", { projectId }),
+  listMaps: () => invoke<WorldMap[]>("list_maps"),
+  getMap: (id: string) => invoke<WorldMap | null>("get_map", { id }),
+  saveMap: (map: WorldMap) => invoke<void>("save_map", { map: { updatedAt: "", ...map } }),
+  deleteMap: (id: string) => invoke<void>("delete_map", { id }),
 
   getWorldSetting: (key: "cover" | "pinned" | "dictionary") => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: "cover" | "pinned" | "dictionary", value: string | null) => invoke<void>("set_world_setting", { key, value }),

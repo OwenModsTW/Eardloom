@@ -962,3 +962,49 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .local-graph { margin-top: 32px; }
 .local-graph h3 { display: flex; align-items: center; gap: 12px; font: 600 12px var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding-bottom: 5px; border-bottom: 1px solid var(--line-strong); margin-bottom: 8px; }
 .local-graph h3 .link { text-transform: none; letter-spacing: 0; }
+
+/* ---------- maps ---------- */
+.map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.map-card { display: flex; flex-direction: column; gap: 2px; }
+.map-thumb { aspect-ratio: 3 / 2; border-radius: var(--r); overflow: hidden; outline: 1px solid var(--line); outline-offset: -1px; margin-bottom: 6px; }
+.map-thumb svg { width: 100%; height: 100%; display: block; }
+.map-card:hover .map-thumb { outline-color: var(--accent); }
+.map-card strong { font: 600 15px var(--serif); }
+.map-card small { color: var(--muted); font-size: 12.5px; }
+.dialog.new-map { width: min(760px, 94vw); }
+.new-map-body { padding: 14px 20px; overflow-y: auto; }
+.new-map-choices { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+.new-map-choices section { display: flex; flex-direction: column; gap: 8px; }
+.new-map-choices h3 { margin: 0; color: var(--text); font: 600 15px var(--serif); }
+.new-map-choices .format-list { margin: 0; }
+.start-with { align-self: flex-start; }
+.new-map-choices .primary, .new-map-choices .ghost { align-self: flex-start; }
+
+.map-page { height: 100%; display: flex; flex-direction: column; }
+.map-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.map-title { max-width: 360px; font: 600 18px var(--serif); background: none; border-color: transparent; }
+.map-title:hover { background: var(--bg-hover); }
+.map-body { flex: 1; min-height: 0; display: flex; position: relative; }
+.map-tools { display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; border-right: 1px solid var(--line); background: var(--bg-side); }
+.map-tools button { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--r); color: var(--muted); }
+.map-tools button:hover { background: var(--bg-hover); color: var(--text); }
+.map-tools button.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.symbol-palette { position: absolute; left: 52px; top: 8px; z-index: 4; width: 230px; max-height: calc(100% - 16px); overflow-y: auto; background: var(--bg-raised); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 8px; }
+.symbol-palette h5 { margin: 6px 2px 4px; font-size: 11.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.symbol-palette section > div { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+.symbol-palette button { height: 40px; display: grid; place-items: center; border-radius: var(--r); background: #efe3c4; }
+.symbol-palette button.on { box-shadow: 0 0 0 2px var(--accent); }
+.map-stage { flex: 1; min-width: 0; position: relative; overflow: hidden; touch-action: none; user-select: none; }
+.map-stage svg { display: block; }
+.map-pin { cursor: pointer; }
+.map-pin:hover path { filter: brightness(1.15); }
+.pin-card { position: absolute; z-index: 5; pointer-events: none; max-width: 260px; padding: 8px 10px; border-radius: var(--r); background: var(--bg-raised); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; }
+.pin-card strong { display: flex; align-items: center; gap: 6px; font: 600 15px var(--serif); }
+.pin-card p { margin: 2px 0; font: italic 13.5px/1.4 var(--serif); color: var(--text-soft); }
+.pin-card small { color: var(--muted); font-size: 12px; }
+.map-props { width: 260px; flex-shrink: 0; border-left: 1px solid var(--line); background: var(--bg-side); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.map-props h4 { margin: 0 0 8px; font: 600 16px var(--serif); }
+.map-props .field { margin-bottom: 10px; }
+.map-props input[type="range"] { padding: 0; accent-color: var(--accent); }
+.map-props .swatch-btn.on { box-shadow: 0 0 0 2px var(--bg-side), 0 0 0 3px var(--text); }
+.map-props .danger.subtle { align-self: flex-start; margin-top: 8px; }

@@ -13,7 +13,9 @@ export type Route =
   | { view: "settings" }
   | { view: "timeline" }
   | { view: "calendar" }
-  | { view: "graph"; focus?: string };
+  | { view: "graph"; focus?: string }
+  | { view: "maps" }
+  | { view: "map"; id: string; pin?: string };
 
 interface State {
   world: WorldInfo | null;

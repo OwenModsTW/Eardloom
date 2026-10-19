@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Plus, Search, Waypoints } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Map as MapIcon, Plus, Search, Waypoints } from "lucide-react";
 import { useStore } from "../store";
 import { api } from "../lib/api";
 import { TypeIcon } from "../lib/icons";
@@ -15,6 +15,8 @@ import { Settings } from "./Settings";
 import { TimelineView } from "./TimelineView";
 import { CalendarEditor } from "./CalendarEditor";
 import { GraphView } from "./GraphView";
+import { MapsPage } from "./maps/MapsPage";
+import { MapEditor } from "./maps/MapEditor";
 import { openMenu } from "./ContextMenu";
 import { setKnownWords } from "../lib/spell";
 import { startAutoBackups } from "../lib/backup";
@@ -110,6 +112,13 @@ export function Shell() {
           <Hourglass size={14} className="type-glyph" />
           <span>Timeline</span>
         </button>
+        <button
+          className={`nav-item ${route.view === "maps" || route.view === "map" ? "active" : ""}`}
+          onClick={() => go({ view: "maps" })}
+        >
+          <MapIcon size={14} className="type-glyph" />
+          <span>Maps</span>
+        </button>
         <button className={`nav-item ${route.view === "graph" ? "active" : ""}`} onClick={() => go({ view: "graph" })}>
           <Waypoints size={14} className="type-glyph" />
           <span>Graph</span>
@@ -173,6 +182,8 @@ export function Shell() {
         {route.view === "settings" && <Settings />}
         {route.view === "timeline" && <TimelineView />}
         {route.view === "calendar" && <CalendarEditor />}
+        {route.view === "maps" && <MapsPage />}
+        {route.view === "map" && <MapEditor key={route.id} id={route.id} focusPin={route.pin} />}
         {route.view === "graph" && <GraphView key={route.focus ?? ""} focus={route.focus} />}
       </main>
 

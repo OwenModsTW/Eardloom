@@ -114,6 +114,20 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX comments_by_doc ON comments(doc_id);
     "#,
+    // v6: maps (uploaded or drawn), with pins in their data
+    r#"
+    CREATE TABLE maps (
+        id         TEXT PRIMARY KEY,
+        title      TEXT NOT NULL,
+        image      TEXT,
+        width      REAL NOT NULL DEFAULT 2000,
+        height     REAL NOT NULL DEFAULT 1400,
+        sort       INTEGER NOT NULL DEFAULT 0,
+        data       TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

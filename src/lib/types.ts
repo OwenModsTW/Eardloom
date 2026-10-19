@@ -112,7 +112,7 @@ export interface EntrySummary {
 }
 
 export interface Backlink {
-  sourceKind: "entry" | "doc";
+  sourceKind: "entry" | "doc" | "map";
   sourceId: string;
   title: string;
   parentId: string;

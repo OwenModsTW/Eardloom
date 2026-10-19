@@ -1,6 +1,7 @@
 mod backup;
 mod codex;
 mod db;
+mod maps;
 mod share;
 mod timeline;
 mod world;
@@ -42,6 +43,10 @@ pub fn run() {
             codex::search,
             codex::incoming_link_counts,
             codex::link_graph,
+            maps::list_maps,
+            maps::get_map,
+            maps::save_map,
+            maps::delete_map,
             writing::list_projects,
             writing::save_project,
             writing::delete_project,

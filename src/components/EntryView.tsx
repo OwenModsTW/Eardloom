@@ -277,6 +277,13 @@ function Backlinks({ id }: { id: string }) {
     api.backlinks(id).then(setLinks);
   }, [id, entries]);
 
+  // Open the map centred on this entry's pin.
+  const openOnMap = async (mapId: string) => {
+    const map = await api.getMap(mapId);
+    const pin = map?.data?.pins?.find((p) => p.entryId === id);
+    go({ view: "map", id: mapId, pin: pin?.id });
+  };
+
   const fieldLabel = (l: Backlink) => {
     if (l.via === "mention") return "in article";
     for (const t of types) {
@@ -288,6 +295,7 @@ function Backlinks({ id }: { id: string }) {
 
   const fromEntries = links.filter((l) => l.sourceKind === "entry");
   const fromDocs = links.filter((l) => l.sourceKind === "doc");
+  const onMaps = links.filter((l) => l.sourceKind === "map");
   if (!links.length) return null;
 
   return (
@@ -307,6 +315,20 @@ function Backlinks({ id }: { id: string }) {
                 </li>
               );
             })}
+          </ul>
+        </section>
+      )}
+      {onMaps.length > 0 && (
+        <section>
+          <h3>On maps</h3>
+          <ul>
+            {onMaps.map((l) => (
+              <li key={l.sourceId}>
+                <button className="link" onClick={() => openOnMap(l.sourceId)}>
+                  {l.title}
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       )}
