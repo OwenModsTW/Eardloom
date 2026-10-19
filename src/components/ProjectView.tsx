@@ -697,6 +697,9 @@ function DocEditor({
             </span>
             <span>{stats.characters.toLocaleString()} characters</span>
             <span>{Math.max(1, Math.round(stats.words / 250))} min read</span>
+            <span title="Standard manuscript pages (about 250 words each)">
+              ~{Math.max(1, Math.ceil(stats.words / 250)).toLocaleString()} {Math.ceil(stats.words / 250) > 1 ? "pages" : "page"}
+            </span>
             <TargetMeter label="chapter" words={stats.words} target={target} onChange={onTarget} />
           </footer>
         </>

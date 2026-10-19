@@ -27,6 +27,8 @@ export interface ManuscriptLook {
   indent: boolean;
   typewriter: boolean;
   dimOthers: boolean;
+  /** Show the chapter as pages of paper, with page breaks marked. */
+  pageView: boolean;
 }
 
 export const FONTS: Record<ManuscriptLook["font"], { label: string; css: string }> = {
@@ -38,7 +40,7 @@ export const FONTS: Record<ManuscriptLook["font"], { label: string; css: string 
 };
 
 const LOOK = "eardloom.manuscript";
-const LOOK_DEFAULTS: ManuscriptLook = { font: "literata", size: 18, lineHeight: 1.8, width: 700, indent: false, typewriter: false, dimOthers: false };
+const LOOK_DEFAULTS: ManuscriptLook = { font: "literata", size: 18, lineHeight: 1.8, width: 700, indent: false, typewriter: false, dimOthers: false, pageView: false };
 
 export function getManuscriptLook(): ManuscriptLook {
   try {
@@ -56,6 +58,7 @@ export function applyManuscriptLook(look: ManuscriptLook = getManuscriptLook()) 
   s.setProperty("--ms-width", `${look.width}px`);
   document.documentElement.classList.toggle("ms-indent", look.indent);
   document.documentElement.classList.toggle("ms-dim", look.dimOthers);
+  document.documentElement.classList.toggle("ms-pages", look.pageView);
 }
 
 export function setManuscriptLook(patch: Partial<ManuscriptLook>) {

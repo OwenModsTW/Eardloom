@@ -120,6 +120,10 @@ function LookPanel() {
       {stepper("Line spacing", look.lineHeight.toFixed(1), () => set({ lineHeight: Math.max(1.2, +(look.lineHeight - 0.1).toFixed(1)) }), () => set({ lineHeight: Math.min(2.6, +(look.lineHeight + 0.1).toFixed(1)) }))}
       {stepper("Page width", `${look.width}px`, () => set({ width: Math.max(480, look.width - 40) }), () => set({ width: Math.min(1200, look.width + 40) }))}
       <label className="check">
+        <input type="checkbox" checked={look.pageView} onChange={(e) => set({ pageView: e.target.checked })} />
+        <span>Page view: write on paper, with page breaks marked</span>
+      </label>
+      <label className="check">
         <input type="checkbox" checked={look.indent} onChange={(e) => set({ indent: e.target.checked })} />
         <span>Indent paragraphs like a printed novel</span>
       </label>

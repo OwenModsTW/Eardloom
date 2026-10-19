@@ -1219,3 +1219,21 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .ProseMirror td p, .ProseMirror th p { margin: 0; text-indent: 0; }
 .ProseMirror .selectedCell::after { content: ""; position: absolute; inset: 0; background: var(--accent-soft); pointer-events: none; }
 .ProseMirror .tableWrapper { overflow-x: auto; }
+
+/* ---------- page view ---------- */
+.ms-pages .manuscript { background: var(--bg-side); }
+.ms-pages .manuscript .doc {
+  /* A sheet with book margins; a faint line where each page would end (A-series proportions). */
+  --page-h: calc((var(--ms-width, 700px) + 160px) * 1.414);
+  max-width: calc(var(--ms-width, 700px) + 160px);
+  margin: 28px auto 60px;
+  padding: 72px 80px 96px;
+  background-color: var(--paper, var(--bg-raised));
+  background-image: repeating-linear-gradient(to bottom, transparent 0 calc(var(--page-h) - 2px), var(--line-strong) calc(var(--page-h) - 2px) var(--page-h));
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18), 0 0 1px rgb(0 0 0 / 0.2);
+}
+.ms-pages .manuscript .doc .format-bar { background: var(--paper, var(--bg-raised)); }
+.ms-pages .manuscript .flow-toolbar { background: var(--paper, var(--bg-raised)); }
+.ms-pages .split-pane .doc { margin: 16px; padding: 48px 40px 72px; }
