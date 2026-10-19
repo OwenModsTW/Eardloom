@@ -20,6 +20,11 @@ export function openMenu(e: React.MouseEvent, items: MenuItem[]) {
   useMenu.setState({ menu: { x: target ? target.left : e.clientX, y: target ? target.bottom + 4 : e.clientY, items } });
 }
 
+/** Opens a menu at a screen position, e.g. once async menu items are ready. */
+export function openMenuAt(x: number, y: number, items: MenuItem[]) {
+  useMenu.setState({ menu: { x, y, items } });
+}
+
 export function ContextMenuHost() {
   const { menu, close } = useMenu();
   const ref = useRef<HTMLDivElement>(null);

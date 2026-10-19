@@ -849,3 +849,10 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .cmp-del, .compare-body del, .dialog-foot del { background: color-mix(in srgb, var(--danger) 22%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); border-radius: 2px; }
 .inline-check { padding: 0; align-items: center; }
 .inline-check input { margin: 0; }
+
+/* ---------- spelling ---------- */
+.spell-error {
+  text-decoration: underline wavy color-mix(in srgb, var(--danger) 85%, transparent);
+  text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-skip-ink: none;
+}
+.learned { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }

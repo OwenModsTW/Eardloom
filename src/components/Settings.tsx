@@ -8,6 +8,7 @@ import { ACCENTS, getAppearance, setAppearance, type AccentPreset } from "../lib
 import { Select } from "./Select";
 import { showWhatsNew } from "./WhatsNew";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
+import { getSpellLang, setSpellLang, type SpellLang } from "../lib/spell";
 
 export function Settings() {
   const world = useStore((s) => s.world)!;
@@ -15,6 +16,9 @@ export function Settings() {
   const [version, setVersion] = useState("");
   const [look, setLook] = useState(getAppearance);
   const [author, setAuthor] = useState(getDefaultAuthor);
+  const [spellLang, setSpellLangState] = useState<SpellLang>(getSpellLang);
+  const dictionary = useStore((s) => s.dictionary);
+  const forgetWord = useStore((s) => s.forgetWord);
   const mode = document.documentElement.dataset.theme === "light" ? "light" : "dark";
   const isCustom = !(look.accent in ACCENTS);
   useEffect(() => {
@@ -74,6 +78,38 @@ export function Settings() {
           />
         </div>
         <p className="hint">Used on exported books. Each book can override it in its export settings.</p>
+      </section>
+
+      <section>
+        <h2>Spelling</h2>
+        <div className="setting">
+          <span>Dictionary</span>
+          <Select
+            value={spellLang}
+            onChange={(v) => (setSpellLang(v), setSpellLangState(v))}
+            options={[
+              { value: "en-GB", label: "English (UK)" },
+              { value: "en-US", label: "English (US)" },
+              { value: "off", label: "Off" },
+            ]}
+          />
+        </div>
+        <p className="hint">
+          Names of entries in this world are always spelt right. Right-click a flagged word and choose Learn to add your own
+          words to this world's dictionary.
+        </p>
+        {dictionary.length > 0 && (
+          <div className="learned">
+            {dictionary.map((w) => (
+              <span key={w} className="chip">
+                {w}
+                <button onClick={() => forgetWord(w)} aria-label={`Forget ${w}`}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

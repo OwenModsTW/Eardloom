@@ -26,6 +26,9 @@ import { createEntry } from "../lib/actions";
 import { FormatBar } from "./FormatBar";
 import { FindBar } from "./FindBar";
 import { Search } from "../lib/editor/search";
+import { Spellcheck } from "../lib/editor/spellcheck";
+import { ignoreWord, suggestions } from "../lib/spell";
+import { openMenuAt } from "./ContextMenu";
 import { rtfToContent } from "../lib/editor/rtf";
 import { Slice } from "@tiptap/pm/model";
 import { api } from "../lib/api";
@@ -262,6 +265,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
       Placeholder.configure({ placeholder: placeholder ?? "Start writing… type @ to link an entry" }),
       CharacterCount,
       LoreMention,
+      Spellcheck,
       ...(compact
         ? []
         : [
@@ -277,7 +281,8 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
           ]),
     ],
     editorProps: {
-      attributes: { spellcheck: "true" },
+      // Eardloom's own spellchecker (which can learn words) replaces the browser's.
+      attributes: { spellcheck: "false" },
       // Scrivener (and some other apps) copy formatted text only as RTF, which the
       // webview ignores. Read the RTF ourselves so italics etc. survive the paste.
       handlePaste: (view, event) => {
@@ -311,7 +316,34 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
     },
   });
 
-  const body = <EditorContent editor={editor} className={`rich ${compact ? "compact" : ""} ${className ?? ""}`} />;
+  const spellMenu = async (e: React.MouseEvent) => {
+    const el = (e.target as HTMLElement).closest(".spell-error") as HTMLElement | null;
+    if (!el || !editor) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const word = el.dataset.word ?? el.textContent ?? "";
+    const from = editor.view.posAtDOM(el, 0);
+    const to = from + (el.textContent?.length ?? word.length);
+    const { clientX: x, clientY: y } = e;
+    const replace = (w: string) => editor.chain().focus().insertContentAt({ from, to }, w).run();
+    const list = await suggestions(word);
+    openMenuAt(x, y, [
+      ...(list.length
+        ? list.map((s) => ({ label: <strong>{s}</strong>, onClick: () => replace(s) }))
+        : [{ label: "No suggestions", disabled: true, onClick: () => {} }]),
+      "separator",
+      { label: `Learn “${word}”`, onClick: () => useStore.getState().learnWord(word) },
+      { label: "Ignore for now", onClick: () => ignoreWord(word) },
+    ]);
+  };
+
+  const body = (
+    <EditorContent
+      editor={editor}
+      className={`rich ${compact ? "compact" : ""} ${className ?? ""}`}
+      onContextMenu={spellMenu}
+    />
+  );
   if (compact || !editor) return body;
 
   const onKeyDown = (e: React.KeyboardEvent) => {

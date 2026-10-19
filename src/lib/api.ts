@@ -58,8 +58,8 @@ export const api = {
   deleteSnapshot: (id: string) => invoke<void>("delete_snapshot", { id }),
   clipboardRtf: () => invoke<string | null>("clipboard_rtf"),
 
-  getWorldSetting: (key: "cover" | "pinned") => invoke<string | null>("get_world_setting", { key }),
-  setWorldSetting: (key: "cover" | "pinned", value: string | null) => invoke<void>("set_world_setting", { key, value }),
+  getWorldSetting: (key: "cover" | "pinned" | "dictionary") => invoke<string | null>("get_world_setting", { key }),
+  setWorldSetting: (key: "cover" | "pinned" | "dictionary", value: string | null) => invoke<void>("set_world_setting", { key, value }),
   writingOverview: () =>
     invoke<{
       recent: { id: string; projectId: string; title: string; wordCount: number; updatedAt: string }[];

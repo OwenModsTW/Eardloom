@@ -22,6 +22,8 @@ interface State {
   /** Entries pinned to the world's home page. */
   pinned: string[];
   cover: string | null;
+  /** Words learned for this world's spellchecker. */
+  dictionary: string[];
 
   route: Route;
   back: Route[];
@@ -37,6 +39,8 @@ interface State {
   setWorld: (world: WorldInfo) => void;
   setCalendar: (calendar: Calendar) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
+  learnWord: (word: string) => Promise<void>;
+  forgetWord: (word: string) => Promise<void>;
   setCover: (asset: string | null) => Promise<void>;
   refreshTypes: () => Promise<void>;
   refreshEntries: () => Promise<void>;
@@ -62,6 +66,7 @@ export const useStore = create<State>((set, get) => ({
   calendar: EMPTY_CALENDAR,
   pinned: [],
   cover: null,
+  dictionary: [],
   route: { view: "dashboard" },
   back: [],
   forward: [],
@@ -80,13 +85,21 @@ export const useStore = create<State>((set, get) => ({
       api.listProjects(),
       api.getCalendar(),
     ]);
-    const [pinnedRaw, cover] = await Promise.all([api.getWorldSetting("pinned"), api.getWorldSetting("cover")]);
-    let pinned: string[] = [];
-    try {
-      pinned = JSON.parse(pinnedRaw ?? "[]");
-    } catch {
-      /* start fresh */
-    }
+    const [pinnedRaw, cover, dictionaryRaw] = await Promise.all([
+      api.getWorldSetting("pinned"),
+      api.getWorldSetting("cover"),
+      api.getWorldSetting("dictionary"),
+    ]);
+    const list = (raw: string | null): string[] => {
+      try {
+        const v = JSON.parse(raw ?? "[]");
+        return Array.isArray(v) ? v : [];
+      } catch {
+        return [];
+      }
+    };
+    const pinned = list(pinnedRaw);
+    const dictionary = list(dictionaryRaw);
     set({
       world,
       types,
@@ -95,6 +108,7 @@ export const useStore = create<State>((set, get) => ({
       calendar: calendar ?? EMPTY_CALENDAR,
       pinned,
       cover,
+      dictionary,
       route: { view: "dashboard" },
       back: [],
       forward: [],
@@ -110,6 +124,19 @@ export const useStore = create<State>((set, get) => ({
     const next = pinned.includes(id) ? pinned.filter((x) => x !== id) : [...pinned, id];
     set({ pinned: next });
     await api.setWorldSetting("pinned", JSON.stringify(next));
+  },
+  learnWord: async (word) => {
+    const w = word.replace(/[’‘]/g, "'").trim();
+    const { dictionary } = get();
+    if (!w || dictionary.includes(w)) return;
+    const next = [...dictionary, w].sort((a, b) => a.localeCompare(b));
+    set({ dictionary: next });
+    await api.setWorldSetting("dictionary", JSON.stringify(next));
+  },
+  forgetWord: async (word) => {
+    const next = get().dictionary.filter((w) => w !== word);
+    set({ dictionary: next });
+    await api.setWorldSetting("dictionary", JSON.stringify(next));
   },
   setCover: async (cover) => {
     set({ cover });

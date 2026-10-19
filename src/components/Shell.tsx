@@ -15,6 +15,7 @@ import { Settings } from "./Settings";
 import { TimelineView } from "./TimelineView";
 import { CalendarEditor } from "./CalendarEditor";
 import { openMenu } from "./ContextMenu";
+import { setKnownWords } from "../lib/spell";
 import { ExportBook } from "./ExportBook";
 import type { Project } from "../lib/types";
 
@@ -23,6 +24,13 @@ export function Shell() {
     useStore();
 
   const [exportProject, setExportProject] = useState<Project | null>(null);
+
+  // Learned words and every entry name and alias count as correctly spelt.
+  const dictionary = useStore((s) => s.dictionary);
+  useEffect(() => {
+    const names = entries.flatMap((e) => [e.title, ...e.aliases]).flatMap((n) => n.split(/[^\p{L}\p{M}'’]+/u));
+    setKnownWords([...new Set([...dictionary, ...names].map((w) => w.replace(/[’‘]/g, "'")).filter(Boolean))]);
+  }, [entries, dictionary]);
 
   // The category in view: a category page, or the category of the open entry.
   const activeType =
