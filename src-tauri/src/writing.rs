@@ -434,7 +434,7 @@ mod tests {
     }
 }
 
-/// The clipboard's RTF, if any. Some apps (Scrivener among them) copy only RTF and
+/// The clipboard's RTF, if any. Some writing apps copy only RTF and
 /// plain text, which the webview can't read, so formatting would otherwise be lost.
 #[tauri::command]
 pub fn clipboard_rtf() -> Option<String> {

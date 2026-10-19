@@ -43,8 +43,8 @@ interface Para {
 
 const TOKEN = /\\([a-zA-Z]+)(-?\d+)? ?|\\'([0-9a-fA-F]{2})|\\([^a-zA-Z])|([{}])|([^\\{}\r\n]+)|[\r\n]+/gy;
 
-/** Scrivener writes style markers like <$Scr_Ps::0> and <!$Scr_H::2> into the text. */
-const SCRIVENER_TAG = /<!?\$Scr_([A-Za-z]+)::(\d+)>/g;
+/** Some writing apps embed style markers like <$Scr_Ps::0> and <!$Scr_H::2> into the text. */
+const STYLE_MARKER = /<!?\$Scr_([A-Za-z]+)::(\d+)>/g;
 
 function parse(rtf: string): Para[] {
   const paras: Para[] = [];
@@ -135,12 +135,12 @@ function parse(rtf: string): Para[] {
   return paras;
 }
 
-/** RTF (as copied from Scrivener, Word, WordPad...) to editor paragraphs. */
+/** RTF (as copied from word processors and writing apps) to editor paragraphs. */
 export function rtfToContent(rtf: string): JSONContent[] {
   if (!rtf.trimStart().startsWith("{\\rtf")) return [];
   const out: JSONContent[] = [];
   for (const p of parse(rtf)) {
-    // Scrivener heading styles become real headings; other markers are dropped.
+    // Heading style markers become real headings; other markers are dropped.
     let heading = 0;
     const content: JSONContent[] = [];
     for (const r of p.runs) {
@@ -148,7 +148,7 @@ export function rtfToContent(rtf: string): JSONContent[] {
         content.push({ type: "hardBreak" });
         continue;
       }
-      const text = r.text.replace(SCRIVENER_TAG, (_, kind: string, level: string) => {
+      const text = r.text.replace(STYLE_MARKER, (_, kind: string, level: string) => {
         if (kind === "H") heading = Math.min(3, Math.max(1, Number(level)));
         return "";
       });

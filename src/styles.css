@@ -856,3 +856,12 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
   text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-skip-ink: none;
 }
 .learned { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+
+/* ---------- backups ---------- */
+.grow { flex: 1; min-width: 0; }
+.backup-head { margin-top: 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); }
+.backup-head .hint { margin: 0; }
+.backup-list { list-style: none; padding: 0; margin: 0; max-height: 260px; overflow-y: auto; }
+.backup-list li { display: flex; align-items: center; gap: 12px; padding: 5px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.backup-list li span { flex: 1; }
+.backup-list small { color: var(--muted); font-variant-numeric: tabular-nums; }

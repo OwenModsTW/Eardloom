@@ -283,7 +283,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
     editorProps: {
       // Eardloom's own spellchecker (which can learn words) replaces the browser's.
       attributes: { spellcheck: "false" },
-      // Scrivener (and some other apps) copy formatted text only as RTF, which the
+      // Some writing apps copy formatted text only as RTF, which the
       // webview ignores. Read the RTF ourselves so italics etc. survive the paste.
       handlePaste: (view, event) => {
         const types = Array.from(event.clipboardData?.types ?? []);

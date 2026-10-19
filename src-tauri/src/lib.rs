@@ -1,3 +1,4 @@
+mod backup;
 mod codex;
 mod db;
 mod share;
@@ -56,6 +57,9 @@ pub fn run() {
             writing::delete_snapshot,
             writing::clipboard_rtf,
             share::export_world_pack,
+            backup::default_backup_dir,
+            backup::list_backups,
+            backup::run_backup,
             share::import_world_pack,
             share::write_static_site,
             timeline::get_calendar,

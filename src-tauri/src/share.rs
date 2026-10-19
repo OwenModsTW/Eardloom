@@ -60,31 +60,39 @@ fn strip_private(conn: &Connection) -> CmdResult<HashSet<String>> {
     Ok(private_images.difference(&public_images).cloned().collect())
 }
 
-fn write_pack(world: &OpenWorld, dest: &Path, omit_private: bool, app_version: &str) -> CmdResult<()> {
-    // A consistent snapshot, even while the app keeps writing.
-    let snapshot = temp_path("pack");
+/// A consistent copy of the world's database, even while the app keeps writing.
+/// The caller deletes it when done.
+pub(crate) fn snapshot_db(world: &OpenWorld, label: &str) -> CmdResult<PathBuf> {
+    let snapshot = temp_path(label);
     world
         .conn
         .execute("VACUUM INTO ?1", params![snapshot.to_string_lossy()])
         .map_err(err)?;
+    Ok(snapshot)
+}
+
+/// Writes a world pack from a database snapshot plus the world's assets.
+/// Takes the world's folder and name (not the open world) so it can run without holding the world lock.
+pub(crate) fn zip_world(
+    world_dir: &Path,
+    world_name: &str,
+    snapshot: &Path,
+    dest: &Path,
+    skip_assets: &HashSet<String>,
+    app_version: &str,
+) -> CmdResult<()> {
     let result = (|| {
-        let mut skip_assets = HashSet::new();
-        if omit_private {
-            let conn = Connection::open(&snapshot).map_err(err)?;
-            skip_assets = strip_private(&conn)?;
-            conn.execute_batch("VACUUM").map_err(err)?;
-        }
-        let name = info(world)?.name;
-        let manifest = Manifest { format: PACK_FORMAT.into(), version: 1, name, app_version: app_version.into() };
+        let manifest =
+            Manifest { format: PACK_FORMAT.into(), version: 1, name: world_name.into(), app_version: app_version.into() };
 
         let mut zip = ZipWriter::new(File::create(dest).map_err(err)?);
         let opts = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         zip.start_file(MANIFEST, opts).map_err(err)?;
         zip.write_all(serde_json::to_string_pretty(&manifest).map_err(err)?.as_bytes()).map_err(err)?;
         zip.start_file(DB_FILE, opts).map_err(err)?;
-        zip.write_all(&fs::read(&snapshot).map_err(err)?).map_err(err)?;
+        zip.write_all(&fs::read(snapshot).map_err(err)?).map_err(err)?;
 
-        let assets = world.path.join(ASSETS_DIR);
+        let assets = world_dir.join(ASSETS_DIR);
         if let Ok(dir) = fs::read_dir(&assets) {
             // Images are already compressed; storing them is faster and no bigger.
             let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
@@ -100,10 +108,24 @@ fn write_pack(world: &OpenWorld, dest: &Path, omit_private: bool, app_version: &
         zip.finish().map_err(err)?;
         Ok(())
     })();
-    let _ = fs::remove_file(&snapshot);
     if result.is_err() {
         let _ = fs::remove_file(dest);
     }
+    result
+}
+
+fn write_pack(world: &OpenWorld, dest: &Path, omit_private: bool, app_version: &str) -> CmdResult<()> {
+    let snapshot = snapshot_db(world, "pack")?;
+    let result = (|| {
+        let mut skip_assets = HashSet::new();
+        if omit_private {
+            let conn = Connection::open(&snapshot).map_err(err)?;
+            skip_assets = strip_private(&conn)?;
+            conn.execute_batch("VACUUM").map_err(err)?;
+        }
+        zip_world(&world.path, &info(world)?.name, &snapshot, dest, &skip_assets, app_version)
+    })();
+    let _ = fs::remove_file(&snapshot);
     result
 }
 

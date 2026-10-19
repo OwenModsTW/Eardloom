@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api } from "./lib/api";
 import type { Calendar, EntrySummary, EntryType, Project, WorldInfo } from "./lib/types";
 import { EMPTY_CALENDAR } from "./lib/calendar";
+import { backupOnClose } from "./lib/backup";
 
 export type Route =
   | { view: "dashboard" }
@@ -115,6 +116,7 @@ export const useStore = create<State>((set, get) => ({
     });
   },
   closeWorld: async () => {
+    await backupOnClose();
     await api.closeWorld();
     set({ world: null, types: [], entries: [], projects: [], back: [], forward: [] });
   },

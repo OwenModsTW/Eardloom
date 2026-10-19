@@ -16,6 +16,7 @@ import { TimelineView } from "./TimelineView";
 import { CalendarEditor } from "./CalendarEditor";
 import { openMenu } from "./ContextMenu";
 import { setKnownWords } from "../lib/spell";
+import { startAutoBackups } from "../lib/backup";
 import { ExportBook } from "./ExportBook";
 import type { Project } from "../lib/types";
 
@@ -24,6 +25,9 @@ export function Shell() {
     useStore();
 
   const [exportProject, setExportProject] = useState<Project | null>(null);
+
+  // Automatic backups while this world is open.
+  useEffect(() => startAutoBackups(), [world?.path]);
 
   // Learned words and every entry name and alias count as correctly spelt.
   const dictionary = useStore((s) => s.dictionary);

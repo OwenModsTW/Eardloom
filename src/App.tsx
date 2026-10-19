@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useStore } from "./store";
 import { startUpdateChecks } from "./lib/updater";
+import { backupOnClose } from "./lib/backup";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Home } from "./components/Home";
 import { Shell } from "./components/Shell";
 import { UpdateBanner, UpdatePrompt } from "./components/UpdateBanner";
@@ -13,6 +15,18 @@ export default function App() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return startUpdateChecks();
+  }, []);
+
+  // Closing the window: one last backup (skipped if nothing changed), then close.
+  useEffect(() => {
+    const win = getCurrentWindow();
+    const off = win.onCloseRequested(async (event) => {
+      if (!useStore.getState().world) return;
+      event.preventDefault();
+      await Promise.race([backupOnClose(), new Promise((r) => setTimeout(r, 15_000))]);
+      await win.destroy();
+    });
+    return () => void off.then((f) => f());
   }, []);
 
   return (

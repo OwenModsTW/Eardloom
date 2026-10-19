@@ -7,6 +7,7 @@ import { useUpdater } from "../lib/updater";
 import { ACCENTS, getAppearance, setAppearance, type AccentPreset } from "../lib/theme";
 import { Select } from "./Select";
 import { showWhatsNew } from "./WhatsNew";
+import { BackupSettings } from "./BackupSettings";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 import { getSpellLang, setSpellLang, type SpellLang } from "../lib/spell";
 
@@ -111,6 +112,8 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      <BackupSettings />
 
       <section>
         <h2>This world</h2>
