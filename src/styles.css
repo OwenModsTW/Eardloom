@@ -1008,3 +1008,28 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .map-props input[type="range"] { padding: 0; accent-color: var(--accent); }
 .map-props .swatch-btn.on { box-shadow: 0 0 0 2px var(--bg-side), 0 0 0 3px var(--text); }
 .map-props .danger.subtle { align-self: flex-start; margin-top: 8px; }
+
+/* ---------- AI connector ---------- */
+.ai-apps { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin: 6px 0 10px; }
+.ai-app { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ai-app > div:first-child { display: flex; flex-direction: column; }
+.ai-app small { color: var(--muted); font-size: 12.5px; }
+.ai-app.column { flex-direction: column; align-items: stretch; gap: 6px; }
+.ai-app code { font-size: 12px; }
+.ai-proposals { position: fixed; right: 16px; bottom: 16px; z-index: 85; width: min(400px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.ai-card { background: var(--bg-raised); border: 1px solid var(--line-strong); border-top: 3px solid var(--accent); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.ai-card header { display: flex; align-items: center; gap: 7px; padding: 8px 12px 4px; color: var(--accent); font-weight: 600; font-size: 13.5px; }
+.ai-card header small { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
+.ai-card-body { padding: 2px 12px 8px; font-size: 14px; max-height: 300px; overflow-y: auto; }
+.ai-card-body p { margin: 4px 0; }
+.ai-headline strong { font: 600 16px var(--serif); }
+.ai-quote { font: italic 14px/1.5 var(--serif); color: var(--text-soft); border-left: 2px solid var(--line-strong); padding-left: 8px; }
+.ai-article { font: 14px/1.55 var(--serif); color: var(--text-soft); white-space: pre-wrap; }
+.ai-fields { margin: 6px 0; }
+.ai-fields > div { display: grid; grid-template-columns: 110px 1fr; gap: 6px; padding: 2px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.ai-fields dt { color: var(--muted); }
+.ai-fields dd { margin: 0; }
+.ai-diff { font: 15px/1.6 var(--serif); }
+.ai-diff del { background: color-mix(in srgb, var(--danger) 20%, transparent); text-decoration: line-through; margin-right: 6px; }
+.ai-diff ins { background: color-mix(in srgb, var(--teal) 26%, transparent); text-decoration: none; }
+.ai-card footer { display: flex; justify-content: flex-end; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); }

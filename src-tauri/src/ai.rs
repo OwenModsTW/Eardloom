@@ -1,10 +1,13 @@
-//! The in-app assistant.
+//! The AI connector.
 //!
-//! Eardloom runs the author's own installed AI tool (Claude Code) in the background
-//! and streams the conversation into the app. The AI reaches the world only through
-//! a small local MCP server with Eardloom's own tools. It can read, and it can
-//! *propose* changes, which the author approves in the app. By design it has no
-//! way to write chapters: it helps with worldbuilding, reviews and suggestions.
+//! Eardloom never runs or signs in to an AI itself. Instead it offers a small local
+//! MCP server that the author's own AI app (Claude Desktop, Claude Code, Codex...)
+//! can connect to, the same way those apps connect to any tool. The AI can read the
+//! world and *propose* changes, which the author approves inside Eardloom. By design
+//! it has no way to write chapters: it helps with worldbuilding, reviews and suggestions.
+//!
+//! Those apps start local tools as a program they talk to over stdin/stdout, so
+//! `Eardloom.exe --mcp` acts as a small bridge to the running Eardloom (see `run_bridge`).
 
 use crate::db;
 use crate::timeline;
@@ -13,13 +16,18 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, Read, Write};
+use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+
+/// Where the running app tells the bridge how to reach it.
+const DISCOVERY_FILE: &str = "connector.json";
+/// Matches the identifier in tauri.conf.json (Tauri's app data folder on Windows).
+const APP_ID: &str = "com.eardloom.app";
 
 /// Suggestions to chapter text are capped so the assistant edits lines, not writes prose.
 const MAX_EDIT_WORDS: usize = 60;
@@ -29,7 +37,6 @@ const MAX_ARTICLE_WORDS: usize = 400;
 #[derive(Default)]
 pub struct AiState {
     server: Mutex<Option<(u16, String)>>,
-    process: Mutex<Option<(Child, ChildStdin)>>,
     pending: Mutex<HashMap<String, Sender<String>>>,
     include_private: Mutex<bool>,
 }
@@ -445,19 +452,29 @@ fn timeline_text(c: &Connection) -> CmdResult<String> {
     read_timeline(c)
 }
 
-const INSTRUCTIONS: &str = "Eardloom's world tools. Read before you answer; propose changes rather than assuming them.";
+pub const INSTRUCTIONS: &str = "You are connected to Eardloom, the author's worldbuilding and writing app. \
+You are here to ASSIST: help build the world, review the author's writing, and make suggestions. \
+Do not write books, chapters or scenes for the author, even if asked; offer guidance, questions, outlines of options and \
+short line-edit suggestions instead, and leave the writing to them. \
+Always read before you answer (start with world_overview), and keep to what the world's codex establishes; point out \
+contradictions rather than inventing facts. You cannot change anything directly: every change is a proposal the author \
+approves or skips in Eardloom, so explain each one briefly.";
 
 /// One MCP JSON-RPC message in, one response (or none, for notifications) out.
 fn handle_rpc(app: &AppHandle, msg: &Value) -> Option<Value> {
     let id = msg.get("id")?.clone();
     let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
     let result = match method {
-        "initialize" => Ok(json!({
+        "initialize" => {
+            let client = msg.pointer("/params/clientInfo/name").and_then(Value::as_str).unwrap_or("An AI app");
+            let _ = app.emit("ai://client", client);
+            Ok(json!({
             "protocolVersion": msg.pointer("/params/protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
             "capabilities": { "tools": { "listChanged": false } },
             "serverInfo": { "name": "eardloom", "version": app.package_info().version.to_string() },
             "instructions": INSTRUCTIONS
-        })),
+        }))
+        }
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": tools() })),
         "tools/call" => {
@@ -476,8 +493,13 @@ fn handle_rpc(app: &AppHandle, msg: &Value) -> Option<Value> {
     })
 }
 
-/// Starts the local MCP server once, on a random port, guarded by a random token.
-fn ensure_server(app: &AppHandle) -> CmdResult<(u16, String)> {
+fn discovery_path() -> Option<PathBuf> {
+    Some(PathBuf::from(std::env::var_os("APPDATA")?).join(APP_ID).join(DISCOVERY_FILE))
+}
+
+/// Starts the local MCP server once, on a random port, guarded by a random token,
+/// and tells the bridge where to find it.
+pub fn ensure_server(app: &AppHandle) -> CmdResult<(u16, String)> {
     let ai = app.state::<AiState>();
     let mut guard = ai.server.lock().map_err(err)?;
     if let Some(s) = guard.clone() {
@@ -521,128 +543,198 @@ fn ensure_server(app: &AppHandle) -> CmdResult<(u16, String)> {
             });
         }
     });
+    if let Some(path) = discovery_path() {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(&path, json!({ "port": port, "token": token, "pid": std::process::id() }).to_string());
+    }
     *guard = Some((port, token.clone()));
     Ok((port, token))
 }
 
-// ---------------------------------------------------------------- running Claude Code
+// ---------------------------------------------------------------- the bridge
 
-/// Where the author's Claude Code is installed, if it is.
-fn find_claude() -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path) {
-        let exe = dir.join("claude.exe");
-        if exe.is_file() {
-            return Some(exe);
-        }
-        // npm installs a claude.cmd shim next to node_modules.
-        let shim = dir.join("claude.cmd");
-        if shim.is_file() {
-            let real = dir.join("node_modules").join("@anthropic-ai").join("claude-code").join("bin").join("claude.exe");
-            if real.is_file() {
-                return Some(real);
+/// Sends one JSON-RPC message to the running app and returns its reply (if any).
+fn post(port: u16, token: &str, body: &str) -> std::io::Result<Option<String>> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port))?;
+    stream.set_read_timeout(Some(Duration::from_secs(40 * 60)))?;
+    write!(
+        stream,
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )?;
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw)?;
+    let text = String::from_utf8_lossy(&raw);
+    let (head, rest) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
+    if head.starts_with("HTTP/1.1 202") || rest.trim().is_empty() {
+        return Ok(None);
+    }
+    if !head.starts_with("HTTP/1.1 200") {
+        return Err(std::io::Error::other(head.lines().next().unwrap_or("").to_string()));
+    }
+    Ok(Some(rest.trim().to_string()))
+}
+
+fn reply(id: &Value, result: Value) -> String {
+    json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
+}
+
+/// `Eardloom.exe --mcp`: what an AI app launches. Answers the handshake itself (so the
+/// connection works even before Eardloom is opened) and forwards everything else to the
+/// running app.
+pub fn run_bridge() {
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    for line in stdin.lock().lines().map_while(Result::ok) {
+        let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
+        let Some(id) = msg.get("id").cloned() else { continue }; // notifications need no answer
+        let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+        let out = match method {
+            "initialize" => reply(
+                &id,
+                json!({
+                    "protocolVersion": msg.pointer("/params/protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
+                    "capabilities": { "tools": { "listChanged": false } },
+                    "serverInfo": { "name": "eardloom", "version": env!("CARGO_PKG_VERSION") },
+                    "instructions": INSTRUCTIONS
+                }),
+            ),
+            "tools/list" => reply(&id, json!({ "tools": tools() })),
+            "ping" => reply(&id, json!({})),
+            _ => {
+                let target = discovery_path()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                    .and_then(|v| Some((v.get("port")?.as_u64()? as u16, v.get("token")?.as_str()?.to_string())));
+                let forwarded = target.and_then(|(port, token)| post(port, &token, &line).ok().flatten());
+                forwarded.unwrap_or_else(|| {
+                    reply(
+                        &id,
+                        json!({ "content": [{ "type": "text", "text": "Eardloom isn't open. Ask the author to open Eardloom and their world, then try again." }], "isError": true }),
+                    )
+                })
             }
+        };
+        if writeln!(stdout, "{out}").and_then(|_| stdout.flush()).is_err() {
+            break;
         }
     }
-    let home = std::env::var_os("USERPROFILE").map(PathBuf::from)?;
-    let native = home.join(".local").join("bin").join("claude.exe");
-    native.is_file().then_some(native)
 }
+
+// ---------------------------------------------------------------- connecting AI apps
+
+fn exe_path() -> CmdResult<String> {
+    Ok(std::env::current_exe().map_err(err)?.to_string_lossy().to_string())
+}
+
+fn claude_desktop_config() -> Option<PathBuf> {
+    Some(PathBuf::from(std::env::var_os("APPDATA")?).join("Claude").join("claude_desktop_config.json"))
+}
+
+fn codex_config() -> Option<PathBuf> {
+    let home = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(|h| PathBuf::from(h).join(".codex")))?;
+    Some(home.join("config.toml"))
+}
+
+const CODEX_SECTION: &str = "[mcp_servers.eardloom]";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AssistantInfo {
-    pub claude_path: Option<String>,
+pub struct ConnectorStatus {
+    pub exe: String,
+    pub claude_desktop_installed: bool,
+    pub claude_desktop_connected: bool,
+    pub codex_installed: bool,
+    pub codex_connected: bool,
+    /// For Claude Code, which the author sets up with one command in their own terminal.
+    pub claude_code_command: String,
 }
 
 #[tauri::command]
-pub fn assistant_info() -> AssistantInfo {
-    AssistantInfo { claude_path: find_claude().map(|p| p.to_string_lossy().to_string()) }
+pub fn connector_status() -> CmdResult<ConnectorStatus> {
+    let exe = exe_path()?;
+    let desktop = claude_desktop_config();
+    let desktop_json: Value = desktop.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+    let codex = codex_config();
+    let codex_text = codex.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    Ok(ConnectorStatus {
+        claude_desktop_installed: desktop.as_ref().and_then(|p| p.parent()).is_some_and(|d| d.is_dir()),
+        claude_desktop_connected: desktop_json.pointer("/mcpServers/eardloom").is_some(),
+        codex_installed: codex.as_ref().and_then(|p| p.parent()).is_some_and(|d| d.is_dir()),
+        codex_connected: codex_text.contains(CODEX_SECTION),
+        claude_code_command: format!("claude mcp add --scope user eardloom -- \"{exe}\" --mcp"),
+        exe,
+    })
+}
+
+/// Adds Eardloom to Claude Desktop's list of local tools (keeping a backup of the file).
+#[tauri::command]
+pub fn connect_claude_desktop(connect: bool) -> CmdResult<()> {
+    let path = claude_desktop_config().ok_or("Couldn't find Claude Desktop's settings folder.")?;
+    let existing = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".into());
+    let mut config: Value = serde_json::from_str(&existing).map_err(|_| "Claude Desktop's settings file isn't valid JSON, so it was left alone.")?;
+    if path.exists() {
+        std::fs::write(path.with_extension("json.eardloom-backup"), &existing).map_err(err)?;
+    }
+    let servers = config
+        .as_object_mut()
+        .ok_or("Unexpected settings format.")?
+        .entry("mcpServers")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or("Unexpected settings format.")?;
+    if connect {
+        servers.insert("eardloom".into(), json!({ "command": exe_path()?, "args": ["--mcp"] }));
+    } else {
+        servers.remove("eardloom");
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err)?;
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&config).map_err(err)?).map_err(err)
+}
+
+/// Adds (or removes) Eardloom in Codex's config.toml.
+#[tauri::command]
+pub fn connect_codex(connect: bool) -> CmdResult<()> {
+    let path = codex_config().ok_or("Couldn't find Codex's settings folder.")?;
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    if path.exists() {
+        std::fs::write(path.with_extension("toml.eardloom-backup"), &existing).map_err(err)?;
+    }
+    // Remove any earlier Eardloom section (it runs until the next [section]).
+    let mut kept = Vec::new();
+    let mut skipping = false;
+    for line in existing.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            skipping = t == CODEX_SECTION;
+        }
+        if !skipping {
+            kept.push(line);
+        }
+    }
+    let mut text = kept.join("\n").trim_end().to_string();
+    if connect {
+        let exe = exe_path()?.replace('\\', "\\\\");
+        text = format!("{text}{}{CODEX_SECTION}\ncommand = \"{exe}\"\nargs = [\"--mcp\"]\n", if text.is_empty() { "" } else { "\n\n" });
+    } else if !text.is_empty() {
+        text.push('\n');
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err)?;
+    }
+    std::fs::write(&path, text).map_err(err)
 }
 
 #[tauri::command]
 pub fn assistant_set_private(state: State<AiState>, include: bool) -> CmdResult<()> {
     *state.include_private.lock().map_err(err)? = include;
     Ok(())
-}
-
-/// Starts (or restarts) a conversation, optionally resuming an earlier one.
-#[tauri::command]
-pub fn assistant_start(app: AppHandle, state: State<AiState>, system_prompt: String, resume: Option<String>, session_id: Option<String>) -> CmdResult<()> {
-    assistant_stop_inner(&state);
-    let claude = find_claude().ok_or("Claude Code isn't installed on this computer.")?;
-    let (port, token) = ensure_server(&app)?;
-    let mcp = json!({ "mcpServers": { "eardloom": { "type": "http", "url": format!("http://127.0.0.1:{port}/mcp"), "headers": { "Authorization": format!("Bearer {token}") } } } });
-    // An empty working folder, so no project instructions or files are picked up.
-    let cwd = app.path().app_data_dir().map_err(err)?.join("assistant");
-    std::fs::create_dir_all(&cwd).map_err(err)?;
-
-    let mut cmd = Command::new(claude);
-    cmd.current_dir(&cwd)
-        .args(["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"])
-        // Only Eardloom's tools: no files, no shell, none of the author's other connectors.
-        .args(["--tools", "", "--strict-mcp-config", "--mcp-config", &mcp.to_string(), "--allowedTools", "mcp__eardloom"])
-        .args(["--system-prompt", &system_prompt]);
-    if let Some(r) = resume.filter(|r| !r.is_empty()) {
-        cmd.args(["--resume", &r]);
-    } else if let Some(s) = session_id.filter(|s| !s.is_empty()) {
-        cmd.args(["--session-id", &s]);
-    }
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-    let mut child = cmd.spawn().map_err(|e| format!("Couldn't start Claude Code: {e}"))?;
-    let stdin = child.stdin.take().ok_or("No input pipe")?;
-    let stdout = child.stdout.take().ok_or("No output pipe")?;
-    let stderr = child.stderr.take().ok_or("No error pipe")?;
-
-    let out_app = app.clone();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            let _ = out_app.emit("ai://line", line);
-        }
-        let _ = out_app.emit("ai://exit", ());
-    });
-    let err_app = app.clone();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            let _ = err_app.emit("ai://stderr", line);
-        }
-    });
-    *state.process.lock().map_err(err)? = Some((child, stdin));
-    Ok(())
-}
-
-#[tauri::command]
-pub fn assistant_send(state: State<AiState>, text: String) -> CmdResult<()> {
-    let mut guard = state.process.lock().map_err(err)?;
-    let (_, stdin) = guard.as_mut().ok_or("The assistant isn't running.")?;
-    let msg = json!({ "type": "user", "message": { "role": "user", "content": text } });
-    writeln!(stdin, "{msg}").map_err(err)?;
-    stdin.flush().map_err(err)
-}
-
-fn assistant_stop_inner(state: &AiState) {
-    if let Ok(mut guard) = state.process.lock() {
-        if let Some((mut child, _)) = guard.take() {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-    // Anything still waiting for approval is declined.
-    if let Ok(mut pending) = state.pending.lock() {
-        for (_, tx) in pending.drain() {
-            let _ = tx.send("The conversation was stopped before the author decided.".into());
-        }
-    }
-}
-
-#[tauri::command]
-pub fn assistant_stop(state: State<AiState>) {
-    assistant_stop_inner(&state);
 }
 
 /// The author's decision on a proposal, passed back to the waiting tool call.

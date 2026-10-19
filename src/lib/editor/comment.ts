@@ -3,8 +3,10 @@ import { TextSelection } from "@tiptap/pm/state";
 import { create } from "zustand";
 
 /** The manuscript editor currently open, so side panels can reach into it. */
-export const useActiveEditor = create<{ editor: Editor | null; focusedComment: string | null }>(() => ({
+export const useActiveEditor = create<{ editor: Editor | null; docId: string | null; focusedComment: string | null }>(() => ({
   editor: null,
+  /** The chapter that editor is showing. */
+  docId: null,
   focusedComment: null,
 }));
 

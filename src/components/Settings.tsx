@@ -8,6 +8,7 @@ import { ACCENTS, getAppearance, setAppearance, type AccentPreset } from "../lib
 import { Select } from "./Select";
 import { showWhatsNew } from "./WhatsNew";
 import { BackupSettings } from "./BackupSettings";
+import { AiSettings } from "./AiSettings";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 import { getSpellLang, setSpellLang, type SpellLang } from "../lib/spell";
 
@@ -112,6 +113,8 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      <AiSettings />
 
       <BackupSettings />
 

@@ -8,6 +8,11 @@ mod timeline;
 mod world;
 mod writing;
 
+/// `Eardloom.exe --mcp` is the bridge AI apps launch; it never opens a window.
+pub fn run_mcp_bridge() {
+    ai::run_bridge();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -22,6 +27,13 @@ pub fn run() {
     builder
         .manage(world::AppState::default())
         .manage(ai::AiState::default())
+        // The AI connector is always available while Eardloom is open.
+        .setup(|app| {
+            if let Err(e) = ai::ensure_server(app.handle()) {
+                eprintln!("AI connector unavailable: {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             world::list_recent_worlds,
             world::forget_recent_world,
@@ -49,11 +61,10 @@ pub fn run() {
             maps::get_map,
             maps::save_map,
             maps::delete_map,
-            ai::assistant_info,
+            ai::connector_status,
+            ai::connect_claude_desktop,
+            ai::connect_codex,
             ai::assistant_set_private,
-            ai::assistant_start,
-            ai::assistant_send,
-            ai::assistant_stop,
             ai::assistant_resolve,
             writing::list_projects,
             writing::save_project,

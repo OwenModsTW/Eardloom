@@ -510,6 +510,13 @@ function DocEditor({
     onSaved({ id: d.id, title: d.title, synopsis: d.synopsis, status: d.status, wordCount });
   });
   useEffect(() => registerFlush(flush), [flush]);
+  // Lets AI suggestions for this chapter go into the live editor.
+  useEffect(() => {
+    useActiveEditor.setState({ docId: id });
+    return () => {
+      if (useActiveEditor.getState().docId === id) useActiveEditor.setState({ docId: null });
+    };
+  }, [id]);
 
   if (!doc) return null;
   const update = (patch: Partial<Doc>) => {

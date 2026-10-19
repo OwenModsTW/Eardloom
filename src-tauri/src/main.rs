@@ -2,5 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    eardloom_lib::run()
+    if std::env::args().any(|a| a == "--mcp") {
+        eardloom_lib::run_mcp_bridge();
+    } else {
+        eardloom_lib::run()
+    }
 }

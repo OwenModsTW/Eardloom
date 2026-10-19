@@ -8,6 +8,8 @@ import { Shell } from "./components/Shell";
 import { UpdateBanner, UpdatePrompt } from "./components/UpdateBanner";
 import { WhatsNew } from "./components/WhatsNew";
 import { ContextMenuHost } from "./components/ContextMenu";
+import { AiProposals } from "./components/AiProposals";
+import { syncAiPrivacy } from "./components/AiSettings";
 
 export default function App() {
   const world = useStore((s) => s.world);
@@ -15,6 +17,9 @@ export default function App() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return startUpdateChecks();
+  }, []);
+  useEffect(() => {
+    syncAiPrivacy();
   }, []);
 
   // Closing the window: one last backup (skipped if nothing changed), then close.
@@ -36,6 +41,7 @@ export default function App() {
       {toast && <div className="toast">{toast}</div>}
       <UpdatePrompt />
       <WhatsNew />
+      <AiProposals />
       <ContextMenuHost />
     </div>
   );
