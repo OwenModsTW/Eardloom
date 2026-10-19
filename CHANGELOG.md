@@ -2,6 +2,16 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.10
+
+Easy sharing, and names that read the way you write them.
+
+- **Share an entry**: copy it as a picture to paste straight into a chat or message, copy it as text, or save it as a PDF, Word document, web page or Markdown. Use the Share button on an entry, or right-click it in a list.
+- **Share your world as one file**: a single web page file with every shared entry, the search and the pictures inside. Send it like any attachment; it opens in any browser, on a computer or phone.
+- **World guide**: every shared entry, grouped by category, as a PDF (with contents), Word document or Markdown file.
+- **Mentions read naturally**: when you type @, pick a first name, surname or alias and that's what shows in your text, still linked to the entry. Right-click a mention to change how it reads, or type your own wording.
+- **Fixes**: Settings no longer goes blank once the built-in assistant is installed, and if a page ever fails to draw, Eardloom now shows what went wrong instead of an empty window. Bold and italic text exports correctly to Markdown.
+
 ## 0.1.9
 
 Entry history, side-by-side writing, family trees, images, tables and footnotes, and much more.
