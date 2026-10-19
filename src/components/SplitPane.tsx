@@ -20,14 +20,15 @@ const KINDS: { kind: Kind; label: string; icon: ReactNode }[] = [
 export function SplitPane({
   target,
   docs,
-  activeDocId,
+  mainDocIds,
   renderDoc,
   onChange,
   onClose,
 }: {
   target: SplitTarget | null;
   docs: DocSummary[];
-  activeDocId: string | undefined;
+  /** Chapters already open in the main area. */
+  mainDocIds: string[];
   renderDoc: (id: string) => ReactNode;
   onChange: (t: SplitTarget | null) => void;
   onClose: () => void;
@@ -45,7 +46,7 @@ export function SplitPane({
 
   let body: ReactNode;
   if (choosing || !target) {
-    body = <Chooser initial={target?.kind ?? "entry"} docs={docs} activeDocId={activeDocId} onPick={(t) => (onChange(t), setChoosing(false))} />;
+    body = <Chooser initial={target?.kind ?? "entry"} docs={docs} mainDocIds={mainDocIds} onPick={(t) => (onChange(t), setChoosing(false))} />;
   } else if (target.kind === "entry") {
     body = (
       <div className="split-scroll">
@@ -54,7 +55,7 @@ export function SplitPane({
     );
   } else if (target.kind === "doc") {
     body =
-      target.id === activeDocId ? (
+      mainDocIds.includes(target.id) ? (
         <p className="hint split-note">This chapter is already open on the left. Pick another one to see them side by side.</p>
       ) : (
         <div className="split-scroll">{renderDoc(target.id)}</div>
@@ -95,12 +96,12 @@ export function SplitPane({
 function Chooser({
   initial,
   docs,
-  activeDocId,
+  mainDocIds,
   onPick,
 }: {
   initial: Kind;
   docs: DocSummary[];
-  activeDocId: string | undefined;
+  mainDocIds: string[];
   onPick: (t: SplitTarget) => void;
 }) {
   const entries = useStore((s) => s.entries);
@@ -120,11 +121,11 @@ function Chooser({
         .map((e) => ({ id: e.id, label: e.title, icon: <EntryGlyph entry={e} size={13} /> }));
     if (kind === "doc")
       return docs
-        .filter((d) => d.kind === "text" && d.id !== activeDocId && (!q || d.title.toLowerCase().includes(q)))
+        .filter((d) => d.kind === "text" && !mainDocIds.includes(d.id) && (!q || d.title.toLowerCase().includes(q)))
         .sort((a, b) => a.sort - b.sort)
         .map((d) => ({ id: d.id, label: d.title || "Untitled", icon: <FileText size={13} /> }));
     return maps.filter((m) => !q || m.title.toLowerCase().includes(q)).map((m) => ({ id: m.id, label: m.title, icon: <MapIcon size={13} /> }));
-  }, [kind, q, entries, docs, maps, activeDocId]);
+  }, [kind, q, entries, docs, maps, mainDocIds]);
 
   const empty = kind === "entry" ? "No entries match." : kind === "doc" ? "No other chapters in this book yet." : "No maps yet.";
 

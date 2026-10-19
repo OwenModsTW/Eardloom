@@ -229,14 +229,31 @@ interface Props {
   manuscript?: boolean;
   /** A second manuscript editor (side by side): it doesn't become the one comments and suggestions go to. */
   secondary?: boolean;
+  /** Show the formatting toolbar (off when several editors share one). */
+  toolbar?: boolean;
+  onFocusEditor?: (editor: Editor) => void;
   onStats?: (stats: EditorStats) => void;
 }
 
 const countWords = (text: string) => (text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ?? []).length;
 
 /** Rich text with @mentions. Remount with a `key` to load a different document. */
-export function RichEditor({ content, onChange, placeholder, className, autofocus, compact, manuscript, secondary, onStats }: Props) {
+export function RichEditor({
+  content,
+  onChange,
+  placeholder,
+  className,
+  autofocus,
+  compact,
+  manuscript,
+  secondary,
+  toolbar = true,
+  onFocusEditor,
+  onStats,
+}: Props) {
   const primary = manuscript && !secondary;
+  const onFocusRef = useRef(onFocusEditor);
+  onFocusRef.current = onFocusEditor;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onStatsRef = useRef(onStats);
@@ -314,6 +331,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
       report(editor);
       if (primary) useActiveEditor.setState({ editor });
     },
+    onFocus: ({ editor }) => onFocusRef.current?.(editor),
     onDestroy: () => {
       if (primary) useActiveEditor.setState({ editor: null, focusedComment: null });
     },
@@ -373,7 +391,7 @@ export function RichEditor({ content, onChange, placeholder, className, autofocu
 
   return (
     <div className="rich-frame" onKeyDown={onKeyDown}>
-      <FormatBar editor={editor} manuscript={manuscript} onFind={() => setFind({ term: "", replace: false })} />
+      {toolbar && <FormatBar editor={editor} manuscript={manuscript} onFind={() => setFind({ term: "", replace: false })} />}
       {find && <FindBar editor={editor} initial={find.term} withReplace={find.replace} onClose={() => setFind(null)} />}
       {body}
     </div>

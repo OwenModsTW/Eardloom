@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  Columns2, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
+  BookOpen, Columns2, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
@@ -16,6 +16,8 @@ import { SnapshotPanel } from "./Snapshots";
 import { CardsView, OutlineView, PlanSettingsPanel } from "./Planning";
 import { CommentsPanel } from "./Comments";
 import { SplitPane, type SplitTarget } from "./SplitPane";
+import { FolderFlow } from "./FolderFlow";
+import { snapshotBeforeFirstEdit } from "../lib/editor/autoSnapshot";
 import { useActiveEditor } from "../lib/editor/comment";
 import { planOf } from "../lib/plan";
 import { assetUrl } from "./EntryView";
@@ -39,11 +41,12 @@ function buildTree(docs: DocSummary[]): TreeNode[] {
 
 type Drop = { targetId: string; where: "before" | "after" | "inside" };
 
+/** Stands in for a document id: the whole book as one continuous document. */
+const WHOLE_BOOK = "book";
+
 /** Each book's word total when it was first opened this session, for "+N this session". */
 const sessionStarts = new Map<string, number>();
 
-/** Documents already given an automatic snapshot this session. */
-const autoSnapped = new Set<string>();
 
 /** Click to set a word target; shows progress once one is set. */
 function TargetMeter({ words, target, onChange, label }: { words: number; target?: number; onChange: (n: number | undefined) => void; label: string }) {
@@ -172,8 +175,25 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
 
   const tree = useMemo(() => buildTree(docs), [docs]);
   const activeId = docId ?? docs.find((d) => d.kind === "text")?.id;
-  const activeRef = useRef(activeId);
-  activeRef.current = activeId;
+  const activeDoc = docs.find((d) => d.id === activeId);
+  // A folder (or the whole book) opens as one continuous document.
+  const flowing = activeId === WHOLE_BOOK || activeDoc?.kind === "folder";
+  const [flowFocus, setFlowFocus] = useState<string | null>(null);
+  useEffect(() => setFlowFocus(null), [activeId]);
+  /** The chapter that comments, snapshots and Ctrl+S apply to. */
+  const panelDocId = flowing ? (flowFocus ?? undefined) : activeId;
+  /** Chapters being edited in the main area (so the side pane doesn't open them twice). */
+  const mainDocIds = useMemo(() => {
+    if (!flowing) return activeId ? [activeId] : [];
+    const root = activeId === WHOLE_BOOK ? null : activeId!;
+    const inside = (d: DocSummary): boolean => {
+      for (let p = d.parentId; p; p = docs.find((x) => x.id === p)?.parentId ?? null) if (p === root) return true;
+      return root === null;
+    };
+    return docs.filter((d) => d.kind === "text" && inside(d)).map((d) => d.id);
+  }, [flowing, activeId, docs]);
+  const activeRef = useRef(panelDocId);
+  activeRef.current = panelDocId;
   const total = docs.reduce((n, d) => n + d.wordCount, 0);
   useEffect(() => {
     if (docs.length && !sessionStarts.has(id)) sessionStarts.set(id, total);
@@ -347,9 +367,10 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             setDrop({ targetId: n.id, where: isFolder && y > 0.3 && y < 0.7 ? "inside" : y < 0.5 ? "before" : "after" });
           }}
           onDrop={(e) => (e.preventDefault(), commitDrop().finally(() => (setDrag(null), setDrop(null))))}
-          onClick={() => (isFolder ? mode === "cards" && setScope(n.id) : (open(n.id), mode === "cards" && setMode("write")))}
+          onClick={() => (isFolder ? (mode === "cards" ? setScope(n.id) : mode === "write" && open(n.id)) : (open(n.id), mode === "cards" && setMode("write")))}
           onContextMenu={(e) =>
             openMenu(e, [
+              ...(isFolder ? [{ label: "Read as one document", onClick: () => (setMode("write"), open(n.id)) }, "separator" as const] : []),
               { label: "New document here", onClick: () => add("text", n) },
               { label: "New folder here", onClick: () => add("folder", n) },
               "separator",
@@ -415,6 +436,13 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
           <button className="icon-btn" onClick={() => add("folder")} title="New folder">
             <FolderPlus size={14} />
           </button>
+          <button
+            className={`icon-btn ${activeId === WHOLE_BOOK ? "on" : ""}`}
+            onClick={() => (setMode("write"), open(WHOLE_BOOK))}
+            title="Read and edit the whole book as one document"
+          >
+            <BookOpen size={14} />
+          </button>
           <span className="spacer" />
           <small>
             {total.toLocaleString()} words
@@ -464,7 +492,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
                 title="Comments"
               >
                 <MessageSquare size={15} />
-                {activeId && commentCounts[activeId] ? <span className="tool-badge">{commentCounts[activeId]}</span> : null}
+                {panelDocId && commentCounts[panelDocId] ? <span className="tool-badge">{commentCounts[panelDocId]}</span> : null}
               </button>
             )}
             {!focusMode && (
@@ -491,6 +519,16 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <CardsView {...planProps} />
           ) : mode === "outline" ? (
             <OutlineView {...planProps} />
+          ) : flowing ? (
+            <FolderFlow
+              key={`${activeId}-${editorRev}`}
+              folder={activeId === WHOLE_BOOK ? null : activeDoc!}
+              docs={docs}
+              bookTitle={project.title}
+              onOpen={open}
+              onSaved={(patch) => setDocs((ds) => ds.map((d) => (d.id === patch.id ? { ...d, ...patch } : d)))}
+              onFocusDoc={(focusId, flush) => (setFlowFocus(focusId), (flushDoc.current = flush))}
+            />
           ) : activeId ? (
             <DocEditor
               key={`${activeId}-${editorRev}`}
@@ -516,7 +554,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <SplitPane
               target={split.target}
               docs={docs}
-              activeDocId={activeId}
+              mainDocIds={mainDocIds}
               onChange={(target) => setSplit({ target })}
               onClose={() => setSplit({ open: false })}
               renderDoc={(docId) => (
@@ -536,13 +574,24 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       </div>
 
       {loreOpen && !focusMode && <LorePanel entryId={loreId} onPick={setLoreId} />}
-      {commentsOpen && !focusMode && activeId && mode === "write" && (
-        <CommentsPanel docId={activeId} version={commentVersion} onChanged={() => setCommentVersion((v) => v + 1)} />
-      )}
+      {commentsOpen && !focusMode && mode === "write" &&
+        (panelDocId ? (
+          <CommentsPanel docId={panelDocId} version={commentVersion} onChanged={() => setCommentVersion((v) => v + 1)} />
+        ) : (
+          <aside className="lore">
+            <p className="hint">Click into a chapter to see its comments.</p>
+          </aside>
+        ))}
       {planSettings && <PlanSettingsPanel project={project} onClose={() => setPlanSettings(false)} />}
-      {snapsOpen && !focusMode && activeId && (
+      {snapsOpen && !focusMode && !panelDocId && (
+        <aside className="lore">
+          <p className="hint">Click into a chapter to see its snapshots.</p>
+        </aside>
+      )}
+      {snapsOpen && !focusMode && panelDocId && (
         <SnapshotPanel
-          docId={activeId}
+          key={panelDocId}
+          docId={panelDocId}
           version={snapVersion}
           flush={() => flushDoc.current()}
           onRestored={() => (setEditorRev((r) => r + 1), reload())}
@@ -611,11 +660,7 @@ function DocEditor({
 
   if (!doc) return null;
   const update = (patch: Partial<Doc>) => {
-    // Keep the version from before this session's first edit, as a safety net.
-    if (patch.body && !autoSnapped.has(id)) {
-      autoSnapped.add(id);
-      if (doc.wordCount > 0) api.createSnapshot(id, "", true).catch(() => {});
-    }
+    if (patch.body) snapshotBeforeFirstEdit(id, doc.wordCount);
     setDoc((prev) => {
       const next = { ...prev!, ...patch };
       schedule(next);
