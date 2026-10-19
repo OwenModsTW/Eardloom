@@ -2,6 +2,17 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.8
+
+The assistant remembers what you talked about in each entry and chapter.
+
+- **A conversation for every entry and chapter**: open an entry and the assistant picks up where you left off, even after closing Eardloom. Each entry and chapter keeps its own conversation, and there's one about your world as a whole for everywhere else. Suggestions you hadn't decided on are still waiting for you. Start any conversation over with the ↺ button. Conversations are kept in your world and its backups, but never included when you share it.
+- **Better entry suggestions**: the assistant now writes descriptions, history and detail into the entry's article and keeps the summary to a sentence or two.
+- **Tidier replies**: headings, numbered lists and dividers in the assistant's replies now display properly, and text no longer runs under the scrollbar.
+- **Fix**: long values in an entry's list fields no longer overlap each other.
+
+This update upgrades your worlds' storage. After updating, older versions of Eardloom can't open them.
+
 ## 0.1.7
 
 A built-in writing assistant that runs entirely on your computer, if you want it.
