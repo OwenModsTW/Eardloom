@@ -165,7 +165,7 @@ export async function applyProposal(tool: string, args: Args): Promise<string> {
     if (!found) return `There's no entry called "${args.entry}".`;
     const entry = await api.getEntry(found.id);
     const type = types.find((t) => t.id === entry.typeId);
-    const add = str(args.add_to_article);
+    const add = str(args.add_to_article) || str(args.article);
     const next: Entry = {
       ...entry,
       summary: str(args.summary) || entry.summary,

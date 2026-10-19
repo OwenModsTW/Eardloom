@@ -33,6 +33,8 @@ const APP_ID: &str = "com.eardloom.app";
 const MAX_EDIT_WORDS: usize = 60;
 /// Worldbuilding text the assistant may propose for an entry's article in one go.
 const MAX_ARTICLE_WORDS: usize = 400;
+/// A summary is the one- or two-sentence line under an entry's title; detail belongs in the article.
+const MAX_SUMMARY_WORDS: usize = 50;
 
 #[derive(Default)]
 pub struct AiState {
@@ -373,13 +375,16 @@ fn tools() -> Value {
         { "name": "list_books", "description": "The author's books with their chapters, synopses and chapter ids.", "inputSchema": s(json!({}), &[]) },
         { "name": "read_chapter", "description": "Read a chapter, with numbered paragraphs, so you can review it.", "inputSchema": s(json!({ "chapter_id": { "type": "string" } }), &["chapter_id"]) },
         { "name": "propose_new_entry", "description": "Propose a new codex entry. The author approves it before it's created. Field values are keyed by field label; link fields take entry names. Articles are capped at 400 words.", "inputSchema": s(json!({
-            "category": { "type": "string" }, "title": { "type": "string" }, "summary": { "type": "string" },
-            "article": { "type": "string", "description": "Plain paragraphs separated by blank lines." },
+            "category": { "type": "string" }, "title": { "type": "string" },
+            "summary": { "type": "string", "description": "One or two short sentences shown under the title. Not the place for detail." },
+            "article": { "type": "string", "description": "The entry's main text: description, history, culture and other detail. Plain paragraphs separated by blank lines." },
             "aliases": { "type": "array", "items": { "type": "string" } }, "tags": { "type": "array", "items": { "type": "string" } },
             "fields": { "type": "object", "additionalProperties": true }
         }), &["category", "title"]) },
-        { "name": "propose_entry_changes", "description": "Propose changes to an existing entry (summary, fields, aliases, tags, or a few paragraphs added to its article). The author approves them first.", "inputSchema": s(json!({
-            "entry": { "type": "string" }, "summary": { "type": "string" }, "add_to_article": { "type": "string" },
+        { "name": "propose_entry_changes", "description": "Propose changes to an existing entry: its summary, fields, aliases, tags, or paragraphs added to the end of its article. To write about the entry (description, history, culture, details) use add_to_article, not summary. The author approves them first.", "inputSchema": s(json!({
+            "entry": { "type": "string" },
+            "summary": { "type": "string", "description": "Replaces the one- or two-sentence summary under the title. Only use when the summary itself should change." },
+            "add_to_article": { "type": "string", "description": "Paragraphs added to the end of the entry's article (its main text). Plain paragraphs separated by blank lines." },
             "add_aliases": { "type": "array", "items": { "type": "string" } }, "add_tags": { "type": "array", "items": { "type": "string" } },
             "fields": { "type": "object", "additionalProperties": true }
         }), &["entry"]) },
@@ -413,6 +418,12 @@ fn check_proposal(name: &str, args: &Value) -> Result<(), String> {
             let text = format!("{} {}", arg(args, "article"), arg(args, "add_to_article"));
             if words(&text) > MAX_ARTICLE_WORDS {
                 return Err(format!("Too long. Keep proposed article text under {MAX_ARTICLE_WORDS} words; the author writes the rest."));
+            }
+            if words(arg(args, "summary")) > MAX_SUMMARY_WORDS {
+                let field = if name == "propose_new_entry" { "article" } else { "add_to_article" };
+                return Err(format!(
+                    "The summary is too long. Keep it to one or two sentences (under {MAX_SUMMARY_WORDS} words) and put the detail in {field}, then propose again."
+                ));
             }
         }
         _ => {}
@@ -457,7 +468,8 @@ You are here to ASSIST: help build the world, review the author's writing, and m
 Do not write books, chapters or scenes for the author, even if asked; offer guidance, questions, outlines of options and \
 short line-edit suggestions instead, and leave the writing to them. \
 Always read before you answer (start with world_overview), and keep to what the world's codex establishes; point out \
-contradictions rather than inventing facts. You cannot change anything directly: every change is a proposal the author \
+contradictions rather than inventing facts. An entry's summary is one or two sentences; descriptions, history and other \
+detail go in its article. You cannot change anything directly: every change is a proposal the author \
 approves or skips in Eardloom, so explain each one briefly.";
 
 /// One MCP JSON-RPC message in, one response (or none, for notifications) out.
@@ -942,6 +954,10 @@ mod tests {
         assert!(check_proposal("suggest_line_edit", &json!({ "original": "x", "replacement": "word ".repeat(200) })).is_err());
         assert!(check_proposal("propose_new_entry", &json!({ "article": "word ".repeat(MAX_ARTICLE_WORDS + 1) })).is_err());
         assert!(check_proposal("propose_new_entry", &json!({ "article": "A short history." })).is_ok());
+        // Detail belongs in the article, and the error says so.
+        let essay = check_proposal("propose_entry_changes", &json!({ "summary": "word ".repeat(MAX_SUMMARY_WORDS + 1) }));
+        assert!(essay.unwrap_err().contains("add_to_article"));
+        assert!(check_proposal("propose_entry_changes", &json!({ "summary": "A seafaring people of the northern isles." })).is_ok());
     }
 
     #[test]

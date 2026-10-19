@@ -68,10 +68,10 @@ export function ProposalDetails({ tool, args }: { tool: string; args: Record<str
           )}
           {Array.isArray(a.add_aliases) && a.add_aliases.length > 0 && <p className="hint">Also known as: {a.add_aliases.join(", ")}</p>}
           {Array.isArray(a.add_tags) && a.add_tags.length > 0 && <p className="hint">Tags: {a.add_tags.join(", ")}</p>}
-          {a.add_to_article && (
+          {Boolean(a.add_to_article || a.article) && (
             <p className="ai-article">
               <span className="hint">Add to article: </span>
-              {String(a.add_to_article)}
+              {String(a.add_to_article || a.article)}
             </p>
           )}
         </>
