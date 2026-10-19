@@ -840,6 +840,96 @@ pub fn assistant_resolve(state: State<AiState>, id: String, outcome: String) -> 
     Ok(())
 }
 
+// ---------------------------------------------------------------- the built-in assistant
+
+const READ_TOOLS: &[&str] = &["world_overview", "search", "list_entries", "read_entry", "read_timeline", "list_books", "read_chapter"];
+
+/// The same tools, in the shape local models expect (OpenAI-style function definitions).
+#[tauri::command]
+pub fn assistant_tool_specs() -> Value {
+    Value::Array(
+        tools()
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|t| json!({ "type": "function", "function": { "name": t["name"], "description": t["description"], "parameters": t["inputSchema"] } }))
+                    .collect()
+            })
+            .unwrap_or_default(),
+    )
+}
+
+/// Runs a read-only tool for the built-in assistant. Proposals go through the app instead.
+#[tauri::command]
+pub fn assistant_read_tool(app: AppHandle, name: String, args: Value) -> Result<String, String> {
+    if !READ_TOOLS.contains(&name.as_str()) {
+        return Err(format!("{name} isn't a lookup tool."));
+    }
+    call_tool(&app, &name, &args)
+}
+
+/// The same limits the connector enforces, for proposals made in the built-in assistant.
+#[tauri::command]
+pub fn assistant_check_proposal(name: String, args: Value) -> Result<(), String> {
+    check_proposal(&name, &args)
+}
+
+/// A search for any of the question's meaningful words, so one matching name is enough.
+fn question_query(question: &str) -> Option<String> {
+    let terms: Vec<String> = question
+        .split(|c: char| !c.is_alphanumeric() && c != '\'' && c != '’')
+        .filter(|w| w.chars().count() > 3)
+        .map(|w| format!("\"{}\"*", w.replace('"', "")))
+        .collect();
+    (!terms.is_empty()).then(|| terms.join(" OR "))
+}
+
+fn truncate(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        format!("{}…", s.chars().take(max_chars).collect::<String>())
+    }
+}
+
+/// What a small local model needs to answer well: the world in brief, the entries that
+/// match the question, and whatever the author has open. Kept compact to fit its memory.
+#[tauri::command]
+pub fn assistant_context(app: AppHandle, query: String, entry_id: Option<String>, chapter_id: Option<String>) -> CmdResult<String> {
+    let include_private = *app.state::<AiState>().include_private.lock().map_err(err)?;
+    app.state::<AppState>().with(|w| {
+        let conn = &w.conn;
+        let mut out = truncate(&world_overview(conn, include_private)?, 3000);
+        if let Some(id) = entry_id.filter(|s| !s.is_empty()) {
+            out += &format!("\n\n## The entry the author has open\n{}", truncate(&read_entry(conn, &id, include_private)?, 4000));
+        }
+        if let Some(id) = chapter_id.filter(|s| !s.is_empty()) {
+            out += &format!("\n\n## The chapter the author has open\n{}", truncate(&read_chapter(conn, &id)?, 9000));
+        }
+        // Entries matching the question, most relevant first.
+        if let Some(q) = question_query(&query) {
+            let ids: Vec<String> = conn
+                .prepare("SELECT id FROM search WHERE kind = 'entry' AND search MATCH ?1 ORDER BY bm25(search, 0, 0, 8.0, 1.0) LIMIT 4")
+                .map_err(err)?
+                .query_map(params![q], |r| r.get(0))
+                .map_err(err)?
+                .flatten()
+                .collect();
+            let mut found = String::new();
+            for id in ids {
+                let text = read_entry(conn, &id, include_private)?;
+                if !text.starts_with("No entry") {
+                    found += &format!("\n\n{}", truncate(&text, 1800));
+                }
+            }
+            if !found.is_empty() {
+                out += &format!("\n\n## Entries that may be relevant{found}");
+            }
+        }
+        Ok(out)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -897,6 +987,30 @@ mod tests {
             read_chapter(&conn, id).expect("read chapter");
         }
         println!("read {} entries and {} chapters without errors", ids.len(), docs.len());
+    }
+
+    #[test]
+    fn context_finds_entries_named_in_the_question() {
+        let path = std::env::temp_dir().join(format!("eardloom-ctx-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let conn = db::open(&path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO entry_types (id, name, plural) VALUES ('c', 'Character', 'Characters');
+             INSERT INTO entries (id, type_id, title) VALUES ('a', 'c', 'Mira Vale'), ('b', 'c', 'Kade Ashborn');
+             INSERT INTO search (kind, id, title, body) VALUES ('entry', 'a', 'Mira Vale', 'A navigator'), ('entry', 'b', 'Kade Ashborn', 'A smuggler');",
+        )
+        .unwrap();
+        let q = question_query("What does Kade think of the harbour?").unwrap();
+        let hits: Vec<String> = conn
+            .prepare("SELECT id FROM search WHERE kind = 'entry' AND search MATCH ?1")
+            .unwrap()
+            .query_map(params![q], |r| r.get(0))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(hits, vec!["b".to_string()], "one matching name is enough");
+        drop(conn);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
