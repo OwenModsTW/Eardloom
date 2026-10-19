@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, History, ImagePlus, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
+import { Copy, History, ImagePlus, LayoutTemplate, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -17,6 +17,8 @@ import { openMenu, type MenuItem } from "./ContextMenu";
 import { EntryHistory } from "./EntryHistory";
 import { FamilyTree } from "./FamilyTree";
 import { fieldsById } from "../lib/relations";
+import { saveAsTemplate } from "../lib/entryTemplates";
+import { askText } from "./Prompt";
 import { registerEntryFlush, useEntryRevision } from "../lib/entrySync";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
 
@@ -147,6 +149,23 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
     ...(inFamilies ? [{ label: "Family tree", icon: <Network size={14} />, onClick: () => (flush(), setFamily(true)) }] : []),
     { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
+    {
+      label: "Save as template…",
+      icon: <LayoutTemplate size={14} />,
+      onClick: async () => {
+        const name = await askText({
+          title: "Save as template",
+          label: `New ${type?.name.toLowerCase() ?? "entries"} can start from this one's fields, summary, article and tags.`,
+          placeholder: "Template name, e.g. Noble house",
+          initial: entry.title,
+          confirm: "Save template",
+        });
+        if (!name) return;
+        await flush();
+        await saveAsTemplate(entry, name);
+        useStore.getState().notify(`Saved “${name}” as a template`);
+      },
+    },
     "separator",
     {
       label: "Delete entry",

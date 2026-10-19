@@ -245,7 +245,7 @@ pub fn read_asset(state: State<AppState>, name: String) -> CmdResult<tauri::ipc:
 }
 
 /// Per-world settings that live alongside the world (not per computer).
-const WORLD_SETTINGS: &[&str] = &["cover", "pinned", "dictionary"];
+const WORLD_SETTINGS: &[&str] = &["cover", "pinned", "dictionary", "entry_templates"];
 
 #[tauri::command]
 pub fn get_world_setting(state: State<AppState>, key: String) -> CmdResult<Option<String>> {

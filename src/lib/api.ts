@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+
+type WorldSetting = "cover" | "pinned" | "dictionary" | "entry_templates";
 import type { JSONContent } from "@tiptap/react";
 import type { WorldMap } from "./maps/model";
 import type {
@@ -80,8 +82,8 @@ export const api = {
   saveMap: (map: WorldMap) => invoke<void>("save_map", { map: { updatedAt: "", ...map } }),
   deleteMap: (id: string) => invoke<void>("delete_map", { id }),
 
-  getWorldSetting: (key: "cover" | "pinned" | "dictionary") => invoke<string | null>("get_world_setting", { key }),
-  setWorldSetting: (key: "cover" | "pinned" | "dictionary", value: string | null) => invoke<void>("set_world_setting", { key, value }),
+  getWorldSetting: (key: WorldSetting) => invoke<string | null>("get_world_setting", { key }),
+  setWorldSetting: (key: WorldSetting, value: string | null) => invoke<void>("set_world_setting", { key, value }),
   writingOverview: () =>
     invoke<{
       recent: { id: string; projectId: string; title: string; wordCount: number; updatedAt: string }[];

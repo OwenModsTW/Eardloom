@@ -7,6 +7,7 @@ import { Home } from "./components/Home";
 import { Shell } from "./components/Shell";
 import { UpdateBanner, UpdatePrompt } from "./components/UpdateBanner";
 import { WhatsNew } from "./components/WhatsNew";
+import { PromptHost } from "./components/Prompt";
 import { ContextMenuHost } from "./components/ContextMenu";
 import { AiProposals } from "./components/AiProposals";
 import { syncAiPrivacy } from "./components/AiSettings";
@@ -43,6 +44,7 @@ export default function App() {
       <WhatsNew />
       <AiProposals />
       <ContextMenuHost />
+      <PromptHost />
     </div>
   );
 }

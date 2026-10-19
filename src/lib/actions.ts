@@ -1,8 +1,9 @@
 import { api, newId } from "./api";
 import { useStore } from "../store";
 import type { Entry, Project } from "./types";
+import type { EntryTemplate } from "./entryTemplates";
 
-export async function createEntry(typeId: string, title = "", navigate = true) {
+export async function createEntry(typeId: string, title = "", navigate = true, template?: EntryTemplate) {
   const entry: Entry = {
     id: newId(),
     typeId,
@@ -15,6 +16,7 @@ export async function createEntry(typeId: string, title = "", navigate = true) {
     image: null,
     emoji: null,
     visibility: "public",
+    ...(template ? structuredClone(template.data) : {}),
   };
   await api.saveEntry(entry);
   const { patchEntry, go } = useStore.getState();
@@ -52,6 +54,39 @@ export async function duplicateEntry(id: string) {
   const { patchEntry, go } = useStore.getState();
   patchEntry({ ...copy, updatedAt: new Date().toISOString() });
   go({ view: "entry", id: copy.id });
+}
+
+/**
+ * Changes several entries at once. Each is saved as a version first, so the change can be
+ * undone from its history. Returns how many changed.
+ */
+export async function bulkUpdate(ids: string[], change: (e: Entry) => Entry | null) {
+  const { patchEntry } = useStore.getState();
+  let n = 0;
+  for (const id of ids) {
+    const before = await api.getEntry(id);
+    const after = change(structuredClone(before));
+    if (!after || JSON.stringify(after) === JSON.stringify(before)) continue;
+    await api.createEntryVersion(id, "Before a bulk change", true).catch(() => {});
+    await api.saveEntry(after);
+    patchEntry({ ...after, updatedAt: new Date().toISOString() });
+    n++;
+  }
+  return n;
+}
+
+export async function bulkDelete(ids: string[]) {
+  const { ask } = await import("@tauri-apps/plugin-dialog");
+  const what = ids.length === 1 ? "this entry" : `these ${ids.length} entries`;
+  if (!(await ask(`Delete ${what}? This can't be undone.`, { title: "Delete entries", kind: "warning" }))) return false;
+  const { removeEntry, pinned, togglePin, notify } = useStore.getState();
+  for (const id of ids) {
+    await api.deleteEntry(id);
+    removeEntry(id);
+    if (pinned.includes(id)) await togglePin(id);
+  }
+  notify(`Deleted ${ids.length} ${ids.length === 1 ? "entry" : "entries"}`);
+  return true;
 }
 
 /** Asks for confirmation, then deletes. Returns true if the entry was deleted. */

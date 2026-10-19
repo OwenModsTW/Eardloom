@@ -1189,3 +1189,18 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .family-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .family-open { opacity: 0; margin-right: 4px; }
 .family-card:hover .family-open { opacity: 1; }
+
+/* ---------- templates, bulk changes, prompts ---------- */
+.split-button { display: inline-flex; }
+.split-button > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-button > button + button { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 7px; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 25%, transparent); }
+.bulk-bar { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 6px; padding: 7px 12px; margin-bottom: 10px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r); }
+.bulk-bar strong { margin-right: 6px; font-size: 13.5px; }
+.data-table .cell-check { width: 34px; text-align: center; }
+.data-table .cell-check input { cursor: pointer; }
+.data-table tr.selected td { background: var(--accent-soft); }
+.dialog.prompt { width: min(440px, 92vw); }
+.prompt-body { padding: 14px 20px; display: flex; flex-direction: column; gap: 8px; }
+.prompt-body label { font-size: 13px; color: var(--text-soft); }
+.prompt-suggestions { display: flex; flex-wrap: wrap; gap: 4px; }
+.prompt-suggestions .tag { cursor: pointer; }
