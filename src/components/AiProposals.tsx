@@ -11,7 +11,7 @@ interface Proposal {
   args: Record<string, unknown>;
 }
 
-const TITLES: Record<string, string> = {
+export const PROPOSAL_TITLES: Record<string, string> = {
   propose_new_entry: "New entry",
   propose_entry_changes: "Changes to an entry",
   comment_on_chapter: "Comment on your writing",
@@ -20,9 +20,10 @@ const TITLES: Record<string, string> = {
 
 const resolve = (id: string, outcome: string) => invoke("assistant_resolve", { id, outcome });
 
-function Details({ p }: { p: Proposal }) {
-  const a = p.args as Record<string, string | string[] | Record<string, unknown> | undefined>;
-  switch (p.tool) {
+/** What a proposed change would do, for the author to judge. */
+export function ProposalDetails({ tool, args }: { tool: string; args: Record<string, unknown> }) {
+  const a = args as Record<string, string | string[] | Record<string, unknown> | undefined>;
+  switch (tool) {
     case "propose_new_entry":
       return (
         <>
@@ -140,11 +141,11 @@ export function AiProposals() {
         <article key={p.id} className="ai-card">
           <header>
             <Sparkles size={14} />
-            <span>{TITLES[p.tool] ?? "Suggestion"}</span>
+            <span>{PROPOSAL_TITLES[p.tool] ?? "Suggestion"}</span>
             <small>from your AI assistant</small>
           </header>
           <div className="ai-card-body">
-            <Details p={p} />
+            <ProposalDetails tool={p.tool} args={p.args} />
           </div>
           <footer>
             <button className="ghost tiny" disabled={busy === p.id} onClick={() => skip(p)}>

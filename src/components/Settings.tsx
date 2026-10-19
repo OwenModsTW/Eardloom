@@ -9,6 +9,7 @@ import { Select } from "./Select";
 import { showWhatsNew } from "./WhatsNew";
 import { BackupSettings } from "./BackupSettings";
 import { AiSettings } from "./AiSettings";
+import { LocalAiSettings } from "./LocalAiSettings";
 import { getDefaultAuthor, setDefaultAuthor } from "../lib/prefs";
 import { getSpellLang, setSpellLang, type SpellLang } from "../lib/spell";
 
@@ -113,6 +114,8 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      <LocalAiSettings />
 
       <AiSettings />
 

@@ -232,33 +232,67 @@ pub fn local_ai_status(app: AppHandle, state: State<LocalAi>) -> CmdResult<Local
     })
 }
 
-/// Graphics devices as llama.cpp sees them, e.g. ("NVIDIA GeForce RTX 5070 Laptop GPU", 8151 MB).
-#[tauri::command]
-pub fn local_ai_hardware(app: AppHandle) -> CmdResult<Vec<(String, u64)>> {
-    let exe = server_exe(&engine_dir(&app)?).ok_or("The engine isn't installed yet.")?;
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Device {
+    /// The engine's name for it, e.g. "Vulkan0".
+    id: String,
+    name: String,
+    memory_mb: u64,
+    /// A separate graphics card (fast), rather than graphics built into the processor
+    /// (which borrows normal memory and is much slower for AI).
+    dedicated: bool,
+}
+
+/// Separate graphics cards report their own memory; built-in ones share system memory.
+fn is_dedicated(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("nvidia") || n.contains("geforce") || n.contains("quadro") || n.contains(" rx ") || n.contains("radeon pro") || n.contains("arc(tm) a") || n.contains("arc(tm) b") || n.contains("arc a") || n.contains("arc b")
+}
+
+/// The device to run on: the best dedicated card if there is one.
+fn best_device(devices: &[Device]) -> Option<&Device> {
+    devices.iter().max_by_key(|d| (d.dedicated, d.memory_mb))
+}
+
+fn list_devices(exe: &Path) -> CmdResult<Vec<Device>> {
     let mut cmd = Command::new(exe);
     cmd.arg("--list-devices");
     hide_window(&mut cmd);
     let out = cmd.output().map_err(err)?;
     let text = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    // Lines look like: "  Vulkan0: NVIDIA GeForce RTX 5070 Laptop GPU (8151 MiB, 7300 MiB free)"
+    Ok(parse_devices(&text))
+}
+
+/// Graphics devices as the engine sees them, best first.
+#[tauri::command]
+pub fn local_ai_hardware(app: AppHandle) -> CmdResult<Vec<Device>> {
+    let exe = server_exe(&engine_dir(&app)?).ok_or("The engine isn't installed yet.")?;
+    let mut devices = list_devices(&exe)?;
+    devices.sort_by_key(|d| std::cmp::Reverse((d.dedicated, d.memory_mb)));
+    Ok(devices)
+}
+
+/// Lines look like: "  Vulkan0: NVIDIA GeForce RTX 5070 Laptop GPU (8151 MiB, 7300 MiB free)"
+fn parse_devices(text: &str) -> Vec<Device> {
     let mut devices = Vec::new();
     for line in text.lines() {
-        let Some((_, rest)) = line.trim().split_once(": ") else { continue };
+        let Some((id, rest)) = line.trim().split_once(": ") else { continue };
         let Some((name, mem)) = rest.rsplit_once(" (") else { continue };
         if let Some(mb) = mem.split_whitespace().next().and_then(|n| n.parse::<u64>().ok()) {
-            if mem.contains("MiB") {
-                devices.push((name.trim().to_string(), mb));
+            if mem.contains("MiB") && !id.contains(' ') {
+                let name = name.trim().to_string();
+                devices.push(Device { id: id.to_string(), dedicated: is_dedicated(&name), name, memory_mb: mb });
             }
         }
     }
-    Ok(devices)
+    devices
 }
 
 // ---- downloading ----------------------------------------------------------------
 
 /// Downloads to `dest`, resuming a partial file, verifying the SHA-256 at the end.
-fn download(app: &AppHandle, url: &str, dest: &Path, sha256: &str, expected: u64, label: &str, cancel: &AtomicBool) -> CmdResult<()> {
+fn download(progress: &dyn Fn(Value), url: &str, dest: &Path, sha256: &str, expected: u64, label: &str, cancel: &AtomicBool) -> CmdResult<()> {
     if let Some(dir) = dest.parent() {
         fs::create_dir_all(dir).map_err(err)?;
     }
@@ -298,12 +332,12 @@ fn download(app: &AppHandle, url: &str, dest: &Path, sha256: &str, expected: u64
         done += n as u64;
         if last.elapsed() > Duration::from_millis(250) {
             last = Instant::now();
-            let _ = app.emit("local-ai://progress", json!({ "label": label, "done": done, "total": total }));
+            progress(json!({ "label": label, "done": done, "total": total }));
         }
     }
     file.flush().map_err(err)?;
     drop(file);
-    let _ = app.emit("local-ai://progress", json!({ "label": format!("Checking {label}"), "done": total, "total": total }));
+    progress(json!({ "label": format!("Checking {label}"), "done": total, "total": total }));
     // Verify the whole file before trusting it.
     let mut hasher = Sha256::new();
     let mut f = File::open(&part).map_err(err)?;
@@ -351,17 +385,20 @@ pub fn local_ai_install(app: AppHandle, state: State<LocalAi>, model: String) ->
     let cancel = state.cancel.clone();
     let app2 = app.clone();
     std::thread::spawn(move || {
+        let progress = |v: Value| {
+            let _ = app2.emit("local-ai://progress", v);
+        };
         let result = (|| -> CmdResult<()> {
             let engine = engine_dir(&app2)?;
             if server_exe(&engine).is_none() {
                 let zip = root(&app2)?.join(format!("engine-{ENGINE_BUILD}.zip"));
-                download(&app2, ENGINE_URL, &zip, ENGINE_SHA256, ENGINE_BYTES, "the AI engine", &cancel)?;
+                download(&progress, ENGINE_URL, &zip, ENGINE_SHA256, ENGINE_BYTES, "the AI engine", &cancel)?;
                 unzip(&zip, &engine)?;
                 let _ = fs::remove_file(zip);
             }
             let dest = models_dir(&app2)?.join(spec.file);
             if !dest.is_file() {
-                download(&app2, spec.url, &dest, spec.sha256, spec.bytes, "the AI model", &cancel)?;
+                download(&progress, spec.url, &dest, spec.sha256, spec.bytes, "the AI model", &cancel)?;
             }
             Ok(())
         })();
@@ -454,16 +491,30 @@ fn start_blocking(app: &AppHandle, model: &str) -> CmdResult<()> {
     }
     let port = free_port()?;
     let key = crate::ai::random_token();
+    // Run on one device: the dedicated card if there is one. Letting the engine spread
+    // across built-in graphics too would be slower and eat system memory.
+    let device = list_devices(&exe).ok().and_then(|d| best_device(&d).cloned());
     let mut cmd = Command::new(&exe);
     cmd.current_dir(exe.parent().unwrap_or(Path::new(".")))
         .arg("-m")
         .arg(&model_path)
         .args(["--host", "127.0.0.1", "--port", &port.to_string(), "--api-key", &key])
         // Everything on the GPU it can fit; a compact cache so a 12k-token conversation fits in 8 GB.
-        .args(["-ngl", "999", "-c", CONTEXT_TOKENS, "-fa", "auto", "-ctk", "q8_0", "-ctv", "q8_0", "--jinja", "--no-webui"])
+        // One conversation at a time (saves graphics memory), with a compact cache.
+        .args(["-np", "1", "-c", CONTEXT_TOKENS, "-fa", "auto", "-ctk", "q8_0", "-ctv", "q8_0", "--jinja", "--no-webui"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    match &device {
+        // Everything the card can hold goes on it.
+        Some(d) if d.dedicated || d.memory_mb >= 2048 => {
+            cmd.args(["--device", &d.id, "-ngl", "999"]);
+        }
+        // No usable graphics: run on the processor.
+        _ => {
+            cmd.args(["--device", "none", "-ngl", "0"]);
+        }
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -506,9 +557,23 @@ fn start_blocking(app: &AppHandle, model: &str) -> CmdResult<()> {
         }
         std::thread::sleep(Duration::from_millis(400));
     }
+    // The graphics card does a slow one-off preparation on its first real request. Do
+    // it now, while the author sees "waking up", so their first question is quick.
+    warm_up(port, &key);
     *state.running.lock().map_err(err)? = Some(Running { child, port, key, model: model.into() });
     ensure_watchdog(app);
     Ok(())
+}
+
+fn warm_up(port: u16, key: &str) {
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(120))).http_status_as_error(false).build().into();
+    let body = json!({ "messages": [{ "role": "user", "content": "Hello" }], "max_tokens": 1, "chat_template_kwargs": { "enable_thinking": false } });
+    let _ = agent
+        .post(&format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .header("Authorization", &format!("Bearer {key}"))
+        .content_type("application/json")
+        .send(body.to_string())
+        .map(|r| r.into_body().read_to_string());
 }
 
 /// Stops the engine after a while unused, so it isn't holding memory while the author writes.
@@ -624,6 +689,41 @@ mod tests {
         let _ = child.kill();
         let _ = child.wait();
         assert!(adopted, "the engine must be in Eardloom's job so it dies with the app");
+    }
+
+    /// Downloads and unpacks the real engine into a scratch folder and lists devices.
+    /// Run by hand: `EARDLOOM_ENGINE_TEST_DIR=... cargo test engine_download -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn engine_download_unpacks_and_sees_devices() {
+        let Ok(dir) = std::env::var("EARDLOOM_ENGINE_TEST_DIR") else { return };
+        let dir = PathBuf::from(dir);
+        let zip = dir.join("engine.zip");
+        download(&|_| {}, ENGINE_URL, &zip, ENGINE_SHA256, ENGINE_BYTES, "the AI engine", &AtomicBool::new(false)).expect("download + checksum");
+        let engine = dir.join("engine");
+        unzip(&zip, &engine).unwrap();
+        let exe = server_exe(&engine).expect("llama-server.exe in the zip");
+        let out = Command::new(&exe).arg("--list-devices").output().unwrap();
+        let text = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let devices = parse_devices(&text);
+        println!("server: {}\ndevices: {:?}\nwould run on: {:?}", exe.display(), devices, best_device(&devices));
+        let help = Command::new(&exe).arg("--help").output().unwrap();
+        let help = String::from_utf8_lossy(&help.stdout).to_string() + &String::from_utf8_lossy(&help.stderr);
+        for flag in ["--api-key", "--jinja", "--no-webui", "-ctk", "-ctv", "-fa", "-ngl", "--list-devices", "--device"] {
+            println!("flag {flag}: {}", if help.contains(flag) { "supported" } else { "MISSING" });
+        }
+    }
+
+    #[test]
+    fn parses_device_lines() {
+        let text = "Available devices:\n  Vulkan0: NVIDIA GeForce RTX 5070 Laptop GPU (8151 MiB, 7300 MiB free)\n  Vulkan1: AMD Radeon(TM) 780M (512 MiB, 400 MiB free)\n";
+        let d = parse_devices(text);
+        assert_eq!(d.len(), 2);
+        assert_eq!((d[0].id.as_str(), d[0].memory_mb, d[0].dedicated), ("Vulkan0", 8151, true));
+        assert!(!d[1].dedicated);
+        // Built-in graphics can report more (shared) memory, but the dedicated card wins.
+        let shared = "  Vulkan0: AMD Radeon 780M Graphics (8350 MiB, 8000 MiB free)\n  Vulkan1: NVIDIA GeForce RTX 5070 Laptop GPU (7891 MiB, 7000 MiB free)\n";
+        assert_eq!(best_device(&parse_devices(shared)).unwrap().id, "Vulkan1");
     }
 
     #[test]

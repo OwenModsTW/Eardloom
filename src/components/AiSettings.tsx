@@ -50,7 +50,7 @@ export function AiSettings() {
 
   return (
     <section>
-      <h2>AI assistants</h2>
+      <h2>Connect another AI app</h2>
       <p className="hint">
         Use your own AI app with your world. Connect Claude or Codex here, then talk to them as usual: they can look things
         up in your world, review your chapters and suggest changes. Nothing changes until you approve it in Eardloom, and

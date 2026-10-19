@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Map as MapIcon, Plus, Search, Waypoints } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Map as MapIcon, Plus, Search, Sparkles, Waypoints } from "lucide-react";
 import { useStore } from "../store";
 import { api } from "../lib/api";
 import { TypeIcon } from "../lib/icons";
@@ -20,6 +20,8 @@ import { MapEditor } from "./maps/MapEditor";
 import { openMenu } from "./ContextMenu";
 import { setKnownWords } from "../lib/spell";
 import { startAutoBackups } from "../lib/backup";
+import { useLocalAi } from "../lib/localAi";
+import { AssistantPanel } from "./AssistantPanel";
 import { ExportBook } from "./ExportBook";
 import type { Project } from "../lib/types";
 
@@ -28,6 +30,9 @@ export function Shell() {
     useStore();
 
   const [exportProject, setExportProject] = useState<Project | null>(null);
+  const assistantOn = useLocalAi((s) => s.enabled);
+  const assistantOpen = useLocalAi((s) => s.panelOpen);
+  const setPanel = useLocalAi((s) => s.setPanel);
 
   // Automatic backups while this world is open.
   useEffect(() => startAutoBackups(), [world?.path]);
@@ -47,6 +52,7 @@ export function Shell() {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), setPalette(true));
+      if (mod && e.key.toLowerCase() === "j" && useLocalAi.getState().enabled) (e.preventDefault(), useLocalAi.getState().setPanel(!useLocalAi.getState().panelOpen));
       if (mod && e.key.toLowerCase() === "n" && activeType) (e.preventDefault(), createEntry(activeType));
       if (e.altKey && e.key === "ArrowLeft") goBack();
       if (e.altKey && e.key === "ArrowRight") goForward();
@@ -61,7 +67,7 @@ export function Shell() {
   }, [goBack, goForward, setPalette, activeType]);
 
   return (
-    <div className={`shell ${focusMode ? "focus-mode" : ""}`}>
+    <div className={`shell ${focusMode ? "focus-mode" : ""} ${assistantOpen && !focusMode ? "with-assistant" : ""}`}>
       <nav className="sidebar">
         <div className="sidebar-top">
           <img className="sidebar-logo" src="/logo.png" alt="Eardloom" />
@@ -168,6 +174,13 @@ export function Shell() {
         )}
 
         <span className="spacer" />
+        {assistantOn && (
+          <button className={`nav-item assistant-toggle ${assistantOpen ? "active" : ""}`} onClick={() => setPanel(!assistantOpen)} title="Assistant (Ctrl+J)">
+            <Sparkles size={14} className="type-glyph" />
+            <span>Assistant</span>
+            <kbd>Ctrl J</kbd>
+          </button>
+        )}
         <button className={`nav-item quiet ${route.view === "settings" ? "active" : ""}`} onClick={() => go({ view: "settings" })}>
           <span>Settings</span>
         </button>
@@ -187,6 +200,7 @@ export function Shell() {
         {route.view === "graph" && <GraphView key={route.focus ?? ""} focus={route.focus} />}
       </main>
 
+      {assistantOn && assistantOpen && !focusMode && <AssistantPanel />}
       {paletteOpen && <SearchPalette />}
       {exportProject && <ExportBook project={exportProject} onClose={() => setExportProject(null)} />}
     </div>
