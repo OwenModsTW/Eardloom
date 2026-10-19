@@ -913,10 +913,10 @@ pub fn assistant_context(app: AppHandle, query: String, entry_id: Option<String>
         let conn = &w.conn;
         let mut out = truncate(&world_overview(conn, include_private)?, 3000);
         if let Some(id) = entry_id.filter(|s| !s.is_empty()) {
-            out += &format!("\n\n## The entry the author has open\n{}", truncate(&read_entry(conn, &id, include_private)?, 4000));
+            out += &format!("\n\n## The entry this conversation is about\n{}", truncate(&read_entry(conn, &id, include_private)?, 4000));
         }
         if let Some(id) = chapter_id.filter(|s| !s.is_empty()) {
-            out += &format!("\n\n## The chapter the author has open\n{}", truncate(&read_chapter(conn, &id)?, 9000));
+            out += &format!("\n\n## The chapter this conversation is about\n{}", truncate(&read_chapter(conn, &id)?, 9000));
         }
         // Entries matching the question, most relevant first.
         if let Some(q) = question_query(&query) {
@@ -940,6 +940,44 @@ pub fn assistant_context(app: AppHandle, query: String, entry_id: Option<String>
         }
         Ok(out)
     })
+}
+
+/// The built-in assistant's saved conversation about one entry, chapter or the whole world.
+#[derive(Serialize)]
+pub struct SavedChat {
+    data: String,
+    updated_at: String,
+}
+
+#[tauri::command]
+pub fn assistant_chat_load(state: State<AppState>, subject: String) -> CmdResult<Option<SavedChat>> {
+    state.with(|w| {
+        w.conn
+            .query_row("SELECT data, updated_at FROM assistant_chats WHERE subject = ?1", [&subject], |r| {
+                Ok(SavedChat { data: r.get(0)?, updated_at: r.get(1)? })
+            })
+            .optional()
+            .map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn assistant_chat_save(state: State<AppState>, subject: String, data: String) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute(
+                "INSERT INTO assistant_chats (subject, data, updated_at) VALUES (?1, ?2, datetime('now'))
+                 ON CONFLICT(subject) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+                params![subject, data],
+            )
+            .map(|_| ())
+            .map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn assistant_chat_clear(state: State<AppState>, subject: String) -> CmdResult<()> {
+    state.with(|w| w.conn.execute("DELETE FROM assistant_chats WHERE subject = ?1", [&subject]).map(|_| ()).map_err(err))
 }
 
 #[cfg(test)]

@@ -128,6 +128,18 @@ const MIGRATIONS: &[&str] = &[
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     "#,
+    // v7: the built-in assistant's conversation about each entry or chapter ('entry:<id>', 'doc:<id>' or 'world')
+    r#"
+    CREATE TABLE assistant_chats (
+        subject    TEXT PRIMARY KEY,
+        data       TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TRIGGER assistant_chats_entry_gone AFTER DELETE ON entries
+        BEGIN DELETE FROM assistant_chats WHERE subject = 'entry:' || old.id; END;
+    CREATE TRIGGER assistant_chats_doc_gone AFTER DELETE ON docs
+        BEGIN DELETE FROM assistant_chats WHERE subject = 'doc:' || old.id; END;
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
@@ -232,6 +244,31 @@ mod tests {
         assert_eq!(v as usize, MIGRATIONS.len());
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn assistant_chats_go_with_their_entry_or_chapter() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate(&conn).unwrap();
+        conn.execute_batch(
+            "INSERT INTO entry_types (id, name, plural) VALUES ('t', 'Place', 'Places');
+             INSERT INTO entries (id, type_id, title) VALUES ('e1', 't', 'Harbour'), ('e2', 't', 'Lighthouse');
+             INSERT INTO projects (id, title) VALUES ('p', 'Book');
+             INSERT INTO docs (id, project_id, title) VALUES ('d', 'p', 'Chapter');
+             INSERT INTO assistant_chats (subject, data) VALUES ('entry:e1', '{}'), ('entry:e2', '{}'), ('doc:d', '{}'), ('world', '{}');
+             DELETE FROM entries WHERE id = 'e1';
+             DELETE FROM projects WHERE id = 'p';",
+        )
+        .unwrap();
+        let left: Vec<String> = conn
+            .prepare("SELECT subject FROM assistant_chats ORDER BY subject")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(left, vec!["entry:e2", "world"]);
     }
 
     #[test]

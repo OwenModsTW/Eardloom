@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowUp, Plus, Sparkles, Square, X } from "lucide-react";
-import { newId } from "../lib/api";
+import { ArrowUp, BookOpen, Globe, RotateCcw, ScrollText, Sparkles, Square, X } from "lucide-react";
+import { api, newId } from "../lib/api";
 import { useStore } from "../store";
 import { localAi, useLocalAi } from "../lib/localAi";
 import { applyProposal } from "../lib/ai/apply";
@@ -21,6 +21,14 @@ interface ToolCall {
   id: string;
   type: "function";
   function: { name: string; arguments: string };
+}
+
+/** A conversation as it's saved in the world. */
+interface Saved {
+  items: Item[];
+  history: ApiMessage[];
+  /** Things that happened since the assistant last spoke, told to it with the next message. */
+  notes?: string[];
 }
 
 const SYSTEM = `You are the assistant built into Eardloom, the author's worldbuilding and writing app, running privately on their computer.
@@ -42,6 +50,55 @@ const ACTIVITY: Record<string, (a: Record<string, unknown>) => string> = {
 };
 
 const MAX_STEPS = 6;
+/** Roughly how much earlier conversation is sent with each question (characters); the world context takes the rest. */
+const SEND_BUDGET = 12_000;
+/** How much of a conversation is kept in the world. */
+const KEEP_BUDGET = 40_000;
+const KEEP_ITEMS = 200;
+
+const size = (m: ApiMessage) => m.content.length + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0);
+
+/** The most recent part of a conversation that fits the budget, always starting at one of the author's messages. */
+function recent(history: ApiMessage[], budget: number): ApiMessage[] {
+  let lastUser = -1;
+  for (let i = history.length - 1; i >= 0 && lastUser < 0; i--) if (history[i].role === "user") lastUser = i;
+  if (lastUser < 0) return [];
+  let start = lastUser;
+  let total = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    total += size(history[i]);
+    if (total > budget) break;
+    if (history[i].role === "user") start = i;
+  }
+  return history.slice(Math.min(start, lastUser));
+}
+
+/** Tidies a conversation saved mid-reply: every tool call gets an answer and nothing is left "typing". */
+function repair(saved: Saved): Saved {
+  const history: ApiMessage[] = [];
+  saved.history.forEach((m, i) => {
+    history.push(m);
+    if (m.role !== "assistant" || !m.tool_calls?.length) return;
+    const answered = new Set(saved.history.slice(i + 1).filter((t) => t.role === "tool").map((t) => t.tool_call_id));
+    for (const call of m.tool_calls) {
+      const id = call.id || call.function.name;
+      if (!answered.has(id)) history.push({ role: "tool", tool_call_id: id, content: "The conversation was closed before this finished." });
+    }
+  });
+  const items = saved.items
+    .map((it) => (it.kind === "assistant" ? { ...it, thinking: "", done: true } : it))
+    .filter((it) => it.kind !== "assistant" || it.text.trim());
+  return { items, history, notes: saved.notes ?? [] };
+}
+
+function subjectOf(entryId: string | undefined, docId: string | null) {
+  return entryId ? `entry:${entryId}` : docId ? `doc:${docId}` : "world";
+}
+
+function when(updatedAt: string) {
+  const d = new Date(updatedAt.replace(" ", "T") + "Z");
+  return isNaN(d.getTime()) ? "" : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
 
 export function AssistantPanel() {
   const { model, thinking, setPanel } = useLocalAi();
@@ -49,18 +106,34 @@ export function AssistantPanel() {
   const activeDoc = useActiveEditor((s) => s.docId);
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState("");
-  const [state, setState] = useState<"idle" | "waking" | "working" | "error">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "waking" | "working" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const [useOpen, setUseOpen] = useState(true);
+  const [subject, setSubject] = useState<string | null>(null);
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [earlier, setEarlier] = useState<{ count: number; at: string } | null>(null);
   const history = useRef<ApiMessage[]>([]);
+  const notes = useRef<string[]>([]);
   const decisions = useRef(new Map<string, (outcome: string) => void>());
   const stopRequested = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const streamTarget = useRef<string | null>(null);
+  /** Which world and subject `items` belongs to; saving waits until it's loaded. */
+  const loaded = useRef<{ world: string; subject: string } | null>(null);
+  const lastSaved = useRef("");
+  const pendingSave = useRef<{ timer: number; run: () => void } | null>(null);
 
-  // What the author has open, offered as context.
+  // Each entry and chapter has its own conversation; anywhere else it's about the world as a whole.
   const openEntry = route.view === "entry" ? entries.find((e) => e.id === route.id) : undefined;
   const openChapter = route.view === "project" ? activeDoc : null;
+  const wanted = subjectOf(openEntry?.id, openChapter);
+  const busy = state === "working" || state === "waking";
+
+  const subjectEntry = subject?.startsWith("entry:") ? entries.find((e) => e.id === subject.slice(6)) : undefined;
+  const subjectLabel = subject?.startsWith("entry:")
+    ? subjectEntry?.title || "This entry"
+    : subject?.startsWith("doc:")
+      ? chapterTitle || "This chapter"
+      : world?.name ?? "Your world";
 
   useEffect(() => {
     const off = listen<{ id: string; text?: string; thinking?: string }>("local-ai://delta", (e) => {
@@ -77,28 +150,103 @@ export function AssistantPanel() {
     return () => void off.then((f) => f());
   }, []);
 
-  // A new world means a new conversation.
-  useEffect(() => newChat(), [world?.path]);
+  const flushSave = () => {
+    const pending = pendingSave.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingSave.current = null;
+    pending.run();
+  };
+
+  // Switch to the conversation for what's open (never in the middle of a reply).
+  useEffect(() => {
+    const worldPath = world?.path;
+    if (!worldPath || busy) return;
+    if (loaded.current?.world === worldPath && loaded.current.subject === wanted) return;
+    if (loaded.current?.world === worldPath) flushSave();
+    else if (pendingSave.current) (clearTimeout(pendingSave.current.timer), (pendingSave.current = null));
+    loaded.current = null;
+    decisions.current.clear();
+    setState("loading");
+    setError(null);
+    setSubject(wanted);
+    invoke<{ data: string; updated_at: string } | null>("assistant_chat_load", { subject: wanted })
+      .then((row) => {
+        if (useStore.getState().world?.path !== worldPath) return;
+        let saved: Saved = { items: [], history: [] };
+        try {
+          if (row) saved = repair(JSON.parse(row.data));
+        } catch {
+          /* an unreadable conversation starts afresh */
+        }
+        history.current = saved.history;
+        notes.current = saved.notes ?? [];
+        setItems(saved.items);
+        setEarlier(row && saved.items.length ? { count: saved.items.length, at: when(row.updated_at) } : null);
+        lastSaved.current = row?.data ?? "";
+        loaded.current = { world: worldPath, subject: wanted };
+        setState("idle");
+      })
+      .catch((e) => {
+        setError(String(e));
+        setState("error");
+      });
+  }, [wanted, world?.path, busy]);
+
+  useEffect(() => {
+    if (!subject?.startsWith("doc:")) return setChapterTitle("");
+    api.getDoc(subject.slice(4)).then((d) => setChapterTitle(d.title), () => setChapterTitle(""));
+  }, [subject]);
+
+  // Save as the conversation goes, a moment after it settles.
+  useEffect(() => {
+    const target = loaded.current;
+    if (!target || items.length === 0) return;
+    const saved: Saved = {
+      items: items.slice(-KEEP_ITEMS).map((it) => (it.kind === "assistant" ? { ...it, thinking: "" } : it)),
+      history: recent(history.current, KEEP_BUDGET),
+      notes: notes.current,
+    };
+    const data = JSON.stringify(saved);
+    if (data === lastSaved.current) return;
+    if (pendingSave.current) clearTimeout(pendingSave.current.timer);
+    const run = () => {
+      if (useStore.getState().world?.path !== target.world) return;
+      lastSaved.current = data;
+      invoke("assistant_chat_save", { subject: target.subject, data }).catch(() => {});
+    };
+    pendingSave.current = { run, timer: window.setTimeout(() => ((pendingSave.current = null), run()), 600) };
+  }, [items, state]);
+
+  // Don't lose the last few words if the panel closes.
+  useEffect(() => () => flushSave(), []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [items]);
 
-  const newChat = () => {
+  const startOver = () => {
+    const target = loaded.current;
+    if (!target || busy) return;
+    if (pendingSave.current) (clearTimeout(pendingSave.current.timer), (pendingSave.current = null));
     history.current = [];
-    decisions.current.forEach((resolve) => resolve("The author started a new conversation."));
+    notes.current = [];
     decisions.current.clear();
     setItems([]);
+    setEarlier(null);
     setError(null);
+    lastSaved.current = "";
+    invoke("assistant_chat_clear", { subject: target.subject }).catch(() => {});
   };
 
   const add = (item: Item) => setItems((list) => [...list, item]);
   const patch = (id: string, p: Partial<Item>) => setItems((list) => list.map((it) => (it.id === id ? ({ ...it, ...p } as Item) : it)));
 
   const decide = async (item: Extract<Item, { kind: "proposal" }>, apply: boolean) => {
-    const resolve = decisions.current.get(item.id);
-    if (!resolve) return;
+    const waiting = decisions.current.get(item.id);
     decisions.current.delete(item.id);
+    // A suggestion from an earlier session: the assistant hears about it with the next message.
+    const resolve = waiting ?? ((outcome: string) => notes.current.push(`${PROPOSAL_TITLES[item.tool] ?? "Suggestion"}: ${outcome}`));
     if (!apply) {
       patch(item.id, { status: "skipped" });
       return resolve("The author skipped this suggestion.");
@@ -141,12 +289,15 @@ export function AssistantPanel() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || state === "working" || state === "waking") return;
+    const target = subject;
+    if (!text || !target || (state !== "idle" && state !== "error")) return;
     setInput("");
     setError(null);
     stopRequested.current = false;
     add({ kind: "user", id: newId(), text });
-    history.current.push({ role: "user", content: text });
+    const since = notes.current.length ? `(Since we last spoke: ${notes.current.join(" ")})\n\n` : "";
+    notes.current = [];
+    history.current.push({ role: "user", content: since + text });
 
     try {
       setState("waking");
@@ -154,8 +305,8 @@ export function AssistantPanel() {
       setState("working");
       const context = await invoke<string>("assistant_context", {
         query: text,
-        entryId: useOpen ? openEntry?.id ?? null : null,
-        chapterId: useOpen ? openChapter : null,
+        entryId: target.startsWith("entry:") ? target.slice(6) : null,
+        chapterId: target.startsWith("doc:") ? target.slice(4) : null,
       });
       const tools = await invoke<unknown[]>("assistant_tool_specs");
       const system: ApiMessage = { role: "system", content: `${SYSTEM}\n\n# The world\n${context}` };
@@ -167,7 +318,7 @@ export function AssistantPanel() {
         const msg = await invoke<ApiMessage>("local_ai_chat", {
           requestId: replyId,
           body: {
-            messages: [system, ...history.current],
+            messages: [system, ...recent(history.current, SEND_BUDGET)],
             tools,
             temperature: 0.6,
             max_tokens: 1500,
@@ -175,11 +326,11 @@ export function AssistantPanel() {
           },
         });
         streamTarget.current = null;
+        history.current.push({ role: "assistant", content: msg.content ?? "", ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}) });
         // Show exactly what came back (the stream and the final message can differ slightly).
         patch(replyId, { text: msg.content ?? "", done: true });
         // Tool-only replies have no text worth showing.
         if (!msg.content?.trim()) setItems((l) => l.filter((it) => it.id !== replyId));
-        history.current.push({ role: "assistant", content: msg.content ?? "", ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}) });
         if (!msg.tool_calls?.length) break;
         for (const call of msg.tool_calls) {
           const result = await runTool(call);
@@ -194,7 +345,39 @@ export function AssistantPanel() {
     }
   };
 
-  const busy = state === "working" || state === "waking";
+  const SubjectIcon = subject?.startsWith("entry:") ? ScrollText : subject?.startsWith("doc:") ? BookOpen : Globe;
+
+  const renderItem = (it: Item) => {
+    if (it.kind === "user") return <div key={it.id} className="msg user">{it.text}</div>;
+    if (it.kind === "activity") return <div key={it.id} className="msg activity">{it.text}</div>;
+    if (it.kind === "assistant")
+      return (
+        <div key={it.id} className="msg assistant">
+          {it.thinking && !it.done && !it.text && <p className="hint">Thinking…</p>}
+          {it.text ? <Markdown text={it.text} /> : !it.done && !it.thinking && <span className="typing" />}
+        </div>
+      );
+    return (
+      <article key={it.id} className={`msg proposal ${it.status}`}>
+        <header>
+          <Sparkles size={13} /> {PROPOSAL_TITLES[it.tool] ?? "Suggestion"}
+        </header>
+        <ProposalDetails tool={it.tool} args={it.args} />
+        {it.status === "waiting" ? (
+          <footer>
+            <button className="ghost tiny" onClick={() => decide(it, false)}>
+              Skip
+            </button>
+            <button className="primary" onClick={() => decide(it, true)}>
+              Apply
+            </button>
+          </footer>
+        ) : (
+          <footer className="outcome">{it.status === "skipped" ? "Skipped" : it.outcome}</footer>
+        )}
+      </article>
+    );
+  };
 
   return (
     <aside className="assistant">
@@ -203,72 +386,67 @@ export function AssistantPanel() {
         <strong>Assistant</strong>
         <small>on this computer</small>
         <span className="spacer" />
-        <button className="icon-btn" onClick={newChat} title="New conversation">
-          <Plus size={15} />
+        <button className="icon-btn" onClick={startOver} disabled={busy || items.length === 0} title="Start this conversation over">
+          <RotateCcw size={14} />
         </button>
         <button className="icon-btn" onClick={() => setPanel(false)} title="Close (Ctrl+J)">
           <X size={15} />
         </button>
       </header>
 
+      <div className="assistant-subject">
+        <SubjectIcon size={13} />
+        <span>
+          Talking about <strong>{subjectLabel}</strong>
+        </span>
+        {busy && subject !== wanted && <small>finishing up</small>}
+      </div>
+
       <div className="assistant-list" ref={listRef}>
-        {items.length === 0 && (
+        {state !== "loading" && items.length === 0 && (
           <div className="assistant-empty">
-            <p>Ask about your world, brainstorm ideas, or get feedback on a chapter.</p>
+            <p>
+              {subject?.startsWith("entry:")
+                ? `Brainstorm, ask questions or get feedback on ${subjectLabel}. This conversation stays with the entry, so you can pick it up any time.`
+                : subject?.startsWith("doc:")
+                  ? "Get feedback on this chapter or talk through what happens next. This conversation stays with the chapter."
+                  : "Ask about your world as a whole. Open an entry or chapter to talk about that one; each keeps its own conversation."}
+            </p>
             <ul>
-              <li>“Which of my characters have no connection to any faction?”</li>
-              <li>“Suggest three rivals for {openEntry?.title ?? "my main character"}.”</li>
-              <li>“Review the pacing of this chapter.”</li>
+              {subject?.startsWith("doc:") ? (
+                <>
+                  <li>“Review the pacing of this chapter.”</li>
+                  <li>“Does anything here contradict my codex?”</li>
+                </>
+              ) : (
+                <>
+                  <li>“Which of my characters have no connection to any faction?”</li>
+                  <li>“Suggest three rivals for {subjectEntry?.title ?? "my main character"}.”</li>
+                </>
+              )}
             </ul>
             <p className="hint">It can suggest changes, but nothing happens until you approve it. It won't write your story for you.</p>
           </div>
         )}
-        {items.map((it) => {
-          if (it.kind === "user") return <div key={it.id} className="msg user">{it.text}</div>;
-          if (it.kind === "activity") return <div key={it.id} className="msg activity">{it.text}</div>;
-          if (it.kind === "assistant")
-            return (
-              <div key={it.id} className="msg assistant">
-                {it.thinking && !it.done && !it.text && <p className="hint">Thinking…</p>}
-                {it.text ? <Markdown text={it.text} /> : !it.done && !it.thinking && <span className="typing" />}
-              </div>
-            );
-          return (
-            <article key={it.id} className={`msg proposal ${it.status}`}>
-              <header>
-                <Sparkles size={13} /> {PROPOSAL_TITLES[it.tool] ?? "Suggestion"}
-              </header>
-              <ProposalDetails tool={it.tool} args={it.args} />
-              {it.status === "waiting" ? (
-                <footer>
-                  <button className="ghost tiny" onClick={() => decide(it, false)}>
-                    Skip
-                  </button>
-                  <button className="primary" onClick={() => decide(it, true)}>
-                    Apply
-                  </button>
-                </footer>
-              ) : (
-                <footer className="outcome">{it.status === "skipped" ? "Skipped" : it.outcome}</footer>
-              )}
-            </article>
-          );
-        })}
+        {items.map((it, i) => [
+          renderItem(it),
+          // Where the earlier conversation ends and today's begins.
+          earlier && i === earlier.count - 1 && (
+            <div key="earlier" className="assistant-earlier">
+              Last talked {earlier.at}
+            </div>
+          ),
+        ])}
         {state === "waking" && <div className="msg activity">Waking the assistant… (the first time can take a little while)</div>}
         {error && <div className="msg error">{error}</div>}
       </div>
 
       <footer className="assistant-input">
-        {(openEntry || openChapter) && (
-          <button className={`context-chip ${useOpen ? "on" : ""}`} onClick={() => setUseOpen(!useOpen)} title="Include what you have open">
-            {useOpen ? "Using" : "Not using"}: {openEntry ? openEntry.title || "this entry" : "this chapter"}
-          </button>
-        )}
         <div className="assistant-box">
           <textarea
             value={input}
             rows={2}
-            placeholder="Ask your assistant…"
+            placeholder={`Ask about ${subjectLabel}…`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) (e.preventDefault(), send());
@@ -279,7 +457,7 @@ export function AssistantPanel() {
               <Square size={13} />
             </button>
           ) : (
-            <button className="icon-btn send" onClick={send} disabled={!input.trim()} title="Send (Enter)">
+            <button className="icon-btn send" onClick={send} disabled={!input.trim() || state === "loading"} title="Send (Enter)">
               <ArrowUp size={15} />
             </button>
           )}

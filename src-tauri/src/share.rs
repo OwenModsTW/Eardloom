@@ -118,11 +118,13 @@ fn write_pack(world: &OpenWorld, dest: &Path, omit_private: bool, app_version: &
     let snapshot = snapshot_db(world, "pack")?;
     let result = (|| {
         let mut skip_assets = HashSet::new();
+        let conn = Connection::open(&snapshot).map_err(err)?;
         if omit_private {
-            let conn = Connection::open(&snapshot).map_err(err)?;
             skip_assets = strip_private(&conn)?;
-            conn.execute_batch("VACUUM").map_err(err)?;
         }
+        // Conversations with the assistant are the author's own; they never travel with a shared world.
+        conn.execute_batch("DELETE FROM assistant_chats; VACUUM;").map_err(err)?;
+        drop(conn);
         zip_world(&world.path, &info(world)?.name, &snapshot, dest, &skip_assets, app_version)
     })();
     let _ = fs::remove_file(&snapshot);
@@ -274,7 +276,8 @@ mod tests {
              INSERT INTO entry_types (id, name, plural) VALUES ('t', 'Character', 'Characters');
              INSERT INTO entries (id, type_id, title, image, visibility) VALUES
                ('a', 't', 'Hero', 'hero.png', 'public'),
-               ('b', 't', 'Villain', 'villain.png', 'private');",
+               ('b', 't', 'Villain', 'villain.png', 'private');
+             INSERT INTO assistant_chats (subject, data) VALUES ('entry:a', '{}');",
         )
         .unwrap();
         let world = OpenWorld { path: world_dir, conn };
@@ -295,6 +298,8 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
         assert_eq!(titles, vec!["Hero"]);
+        let chats: i64 = copy.query_row("SELECT COUNT(*) FROM assistant_chats", [], |r| r.get(0)).unwrap();
+        assert_eq!(chats, 0);
         assert!(out.join(ASSETS_DIR).join("hero.png").exists());
         assert!(!out.join(ASSETS_DIR).join("villain.png").exists());
 
