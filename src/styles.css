@@ -1111,3 +1111,20 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .msg.assistant .markdown ol { color: var(--text); }
 .assistant-list { overflow-x: hidden; scrollbar-gutter: stable; }
 .assistant-list > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+
+/* ---------- entry history ---------- */
+.dialog.entry-history { width: min(1040px, 95vw); height: 82vh; display: flex; flex-direction: column; }
+.history-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; }
+.history-list { border-right: 1px solid var(--line); padding: 12px 14px; overflow-y: auto; background: var(--bg-side); }
+.history-list .snap-list li.on { background: var(--bg-active); }
+.history-compare { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.history-compare > .hint { padding: 20px 24px; }
+.history-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 24px 0; }
+.history-compare .compare-body { flex: 1; max-height: none; }
+.history-part { font: 600 12px var(--ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+.history-part:first-child { margin-top: 0; }
+.history-others { font: 13.5px var(--ui); margin: 0 0 10px; }
+@media (max-width: 760px) {
+  .history-body { grid-template-columns: 1fr; grid-template-rows: 40% 1fr; }
+  .history-list { border-right: 0; border-bottom: 1px solid var(--line); }
+}

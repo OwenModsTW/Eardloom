@@ -11,6 +11,7 @@ import { useStore } from "../../store";
 import { CommentMark, useActiveEditor } from "../editor/comment";
 import { findMatches } from "../editor/search";
 import { parseInline, parseMarkdown } from "../markdown";
+import { entryChanged, flushEntry } from "../entrySync";
 import type { Entry, EntrySummary, FieldDef, FieldValue } from "../types";
 
 type Args = Record<string, unknown>;
@@ -154,7 +155,10 @@ async function withChapter(docId: string, change: (editor: Editor) => string | n
 
 /** Puts an entry back as it was before an assistant's change. */
 export async function restoreEntry(previous: Entry): Promise<string> {
+  await flushEntry(previous.id);
+  await api.createEntryVersion(previous.id, "Before undoing an assistant change", true).catch(() => {});
   await saveEntry(previous);
+  entryChanged(previous.id);
   return `Undid the change to "${previous.title}".`;
 }
 
@@ -194,6 +198,8 @@ export async function applyProposal(tool: string, args: Args, before?: (entry: E
   if (tool === "propose_entry_changes") {
     const found = findEntry(str(args.entry));
     if (!found) return `There's no entry called "${args.entry}".`;
+    // Anything the author just typed is saved first, so the change builds on it rather than replacing it.
+    await flushEntry(found.id);
     const entry = await api.getEntry(found.id);
     const type = types.find((t) => t.id === entry.typeId);
     const rewrite = str(args.rewrite_article);
@@ -212,7 +218,9 @@ export async function applyProposal(tool: string, args: Args, before?: (entry: E
       body,
     };
     before?.(entry);
+    await api.createEntryVersion(entry.id, "Before an assistant change", true).catch(() => {});
     await saveEntry(next);
+    entryChanged(entry.id);
     return withNotes(`Updated "${entry.title}".`);
   }
 

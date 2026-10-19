@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, ImagePlus, MoreHorizontal, Pin, Share2, Trash2 } from "lucide-react";
+import { Copy, History, ImagePlus, MoreHorizontal, Pin, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -14,6 +14,8 @@ import { EmojiPicker } from "./EmojiPicker";
 import { ShareCard } from "./ShareCard";
 import { LocalGraph } from "./GraphView";
 import { openMenu, type MenuItem } from "./ContextMenu";
+import { EntryHistory } from "./EntryHistory";
+import { registerEntryFlush, useEntryRevision } from "../lib/entrySync";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
 
 export { assetUrl };
@@ -49,30 +51,51 @@ const VISIBILITY: { value: Visibility; label: string; hint: string }[] = [
   { value: "private", label: "Private", hint: "Never leaves this computer" },
 ];
 
+/** Entries that already have a version from before this session's first edit. */
+const versionedThisSession = new Set<string>();
+
 export function EntryView({ id }: { id: string }) {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when the entry is changed elsewhere (the assistant, restoring a version).
+  const rev = useEntryRevision((s) => s.revs[id] ?? 0);
+  const [loadedRev, setLoadedRev] = useState(rev);
   useEffect(() => {
     setEntry(null);
     setError(null);
-    api.getEntry(id).then(setEntry, (e) => setError(String(e)));
   }, [id]);
+  useEffect(() => {
+    let live = true;
+    api.getEntry(id).then(
+      (e) => live && (setEntry(e), setLoadedRev(rev)),
+      (e) => live && setError(String(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id, rev]);
 
   if (error) return <p className="page-note">This entry couldn't be opened. {error}</p>;
-  if (!entry) return null;
-  return <EntryEditor key={entry.id} initial={entry} />;
+  if (!entry || entry.id !== id) return null;
+  return <EntryEditor key={`${entry.id}:${loadedRev}`} initial={entry} />;
 }
 
 function EntryEditor({ initial }: { initial: Entry }) {
   const [entry, setEntry] = useState(initial);
   const [pickingEmoji, setPickingEmoji] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [history, setHistory] = useState(false);
   const types = useStore((s) => s.types);
   const world = useStore((s) => s.world)!;
   const { go, patchEntry } = useStore.getState();
   const type = types.find((t) => t.id === entry.typeId);
 
   const { schedule, flush } = useAutosave(async (e: Entry) => {
+    // Keep the entry as it was before the first edit of the session, so it can be restored.
+    if (!versionedThisSession.has(e.id)) {
+      versionedThisSession.add(e.id);
+      await api.createEntryVersion(e.id, "", true).catch(() => {});
+    }
     await api.saveEntry(e);
     patchEntry({
       id: e.id,
@@ -86,6 +109,8 @@ function EntryEditor({ initial }: { initial: Entry }) {
       updatedAt: new Date().toISOString(),
     });
   });
+
+  useEffect(() => registerEntryFlush(entry.id, flush), [entry.id, flush]);
 
   const update = (patch: Partial<Entry>) =>
     setEntry((prev) => {
@@ -113,6 +138,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
       icon: <Pin size={14} />,
       onClick: () => useStore.getState().togglePin(entry.id),
     },
+    { label: "History…", icon: <History size={14} />, onClick: () => (flush(), setHistory(true)) },
     { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
     "separator",
@@ -143,6 +169,9 @@ function EntryEditor({ initial }: { initial: Entry }) {
             </span>
             <span className="entry-stamp">Edited {relativeTime(entry.updatedAt)}</span>
             <span className="spacer" />
+            <button className="ghost tiny" onClick={() => (flush(), setHistory(true))} title="Earlier versions of this entry">
+              <History size={13} /> History
+            </button>
             <button className="ghost tiny" onClick={() => setSharing(true)} title="Make a shareable image of this entry">
               Share
             </button>
@@ -225,6 +254,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
         </aside>
       </article>
       {sharing && <ShareCard entry={entry} onClose={() => setSharing(false)} />}
+      {history && <EntryHistory entryId={entry.id} flush={flush} onClose={() => setHistory(false)} />}
     </MentionClickContext.Provider>
   );
 }

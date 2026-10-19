@@ -223,33 +223,34 @@ pub fn list_entries(state: State<AppState>) -> CmdResult<Vec<EntrySummary>> {
 
 #[tauri::command]
 pub fn get_entry(state: State<AppState>, id: String) -> CmdResult<Entry> {
-    state.with(|w| {
-        w.conn
-            .query_row(
-                "SELECT id, type_id, title, aliases, summary, body, fields, tags, image, visibility,
-                        created_at, updated_at, emoji
-                 FROM entries WHERE id = ?1",
-                [&id],
-                |r| {
-                    Ok(Entry {
-                        id: r.get(0)?,
-                        type_id: r.get(1)?,
-                        title: r.get(2)?,
-                        aliases: json_vec(r.get(3)?),
-                        summary: r.get(4)?,
-                        body: json_val(r.get(5)?),
-                        fields: json_val(r.get(6)?).unwrap_or(Value::Object(Default::default())),
-                        tags: json_vec(r.get(7)?),
-                        image: r.get(8)?,
-                        visibility: r.get(9)?,
-                        created_at: r.get(10)?,
-                        updated_at: r.get(11)?,
-                        emoji: r.get(12)?,
-                    })
-                },
-            )
-            .map_err(err)
-    })
+    state.with(|w| load_entry(&w.conn, &id).map_err(err))
+}
+
+fn load_entry(conn: &Connection, id: &str) -> rusqlite::Result<Entry> {
+    conn
+        .query_row(
+            "SELECT id, type_id, title, aliases, summary, body, fields, tags, image, visibility,
+                    created_at, updated_at, emoji
+             FROM entries WHERE id = ?1",
+            [id],
+            |r| {
+                Ok(Entry {
+                    id: r.get(0)?,
+                    type_id: r.get(1)?,
+                    title: r.get(2)?,
+                    aliases: json_vec(r.get(3)?),
+                    summary: r.get(4)?,
+                    body: json_val(r.get(5)?),
+                    fields: json_val(r.get(6)?).unwrap_or(Value::Object(Default::default())),
+                    tags: json_vec(r.get(7)?),
+                    image: r.get(8)?,
+                    visibility: r.get(9)?,
+                    created_at: r.get(10)?,
+                    updated_at: r.get(11)?,
+                    emoji: r.get(12)?,
+                })
+            },
+        )
 }
 
 #[tauri::command]
@@ -454,4 +455,173 @@ pub fn link_graph(state: State<AppState>) -> CmdResult<Graph> {
             .map_err(err)?;
         Ok(Graph { links, docs })
     })
+}
+
+// ---- Versions of entries ----
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryVersionSummary {
+    pub id: String,
+    pub name: String,
+    pub automatic: bool,
+    pub word_count: i64,
+    pub created_at: String,
+}
+
+/// Automatic versions kept per entry; named ones are never pruned.
+const KEEP_AUTOMATIC_VERSIONS: i64 = 30;
+
+/// Everything the author writes in an entry (not its category or sharing setting).
+fn version_data(e: &Entry) -> String {
+    serde_json::json!({
+        "title": e.title, "aliases": e.aliases, "summary": e.summary, "body": e.body,
+        "fields": e.fields, "tags": e.tags, "image": e.image, "emoji": e.emoji,
+    })
+    .to_string()
+}
+
+/// Saves the entry as it is now. An automatic version is skipped if nothing changed since the
+/// last version; returns whether one was saved.
+pub(crate) fn save_entry_version(conn: &Connection, id: &str, entry_id: &str, name: &str, automatic: bool) -> CmdResult<bool> {
+    let entry = load_entry(conn, entry_id).map_err(err)?;
+    let data = version_data(&entry);
+    if automatic {
+        let last: Option<String> = conn
+            .query_row(
+                "SELECT data FROM entry_versions WHERE entry_id = ?1 ORDER BY created_at DESC LIMIT 1",
+                [entry_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(err)?;
+        if last.as_deref() == Some(data.as_str()) {
+            return Ok(false);
+        }
+    }
+    let words = entry.body.as_ref().map(|b| db::extract(b).text.split_whitespace().count()).unwrap_or(0) as i64;
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    tx.execute(
+        "INSERT INTO entry_versions (id, entry_id, name, automatic, data, word_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, entry_id, name, automatic, data, words],
+    )
+    .map_err(err)?;
+    tx.execute(
+        "DELETE FROM entry_versions WHERE entry_id = ?1 AND automatic = 1 AND id NOT IN (
+           SELECT id FROM entry_versions WHERE entry_id = ?1 AND automatic = 1 ORDER BY created_at DESC LIMIT ?2)",
+        params![entry_id, KEEP_AUTOMATIC_VERSIONS],
+    )
+    .map_err(err)?;
+    tx.commit().map_err(err)?;
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn create_entry_version(state: State<AppState>, id: String, entry_id: String, name: String, automatic: bool) -> CmdResult<bool> {
+    state.with(|w| save_entry_version(&w.conn, &id, &entry_id, &name, automatic))
+}
+
+#[tauri::command]
+pub fn list_entry_versions(state: State<AppState>, entry_id: String) -> CmdResult<Vec<EntryVersionSummary>> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT id, name, automatic, word_count, created_at FROM entry_versions
+                  WHERE entry_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(err)?;
+        let rows = stmt
+            .query_map([&entry_id], |r| {
+                Ok(EntryVersionSummary {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    automatic: r.get::<_, i64>(2)? != 0,
+                    word_count: r.get(3)?,
+                    created_at: r.get(4)?,
+                })
+            })
+            .map_err(err)?;
+        rows.collect::<Result<_, _>>().map_err(err)
+    })
+}
+
+/// A saved version's content: title, aliases, summary, body, fields, tags, image and emoji.
+#[tauri::command]
+pub fn get_entry_version(state: State<AppState>, id: String) -> CmdResult<Value> {
+    state.with(|w| {
+        let data: String = w
+            .conn
+            .query_row("SELECT data FROM entry_versions WHERE id = ?1", [&id], |r| r.get(0))
+            .map_err(err)?;
+        serde_json::from_str(&data).map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn rename_entry_version(state: State<AppState>, id: String, name: String) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute("UPDATE entry_versions SET name = ?2, automatic = 0 WHERE id = ?1", params![id, name])
+            .map(|_| ())
+            .map_err(err)
+    })
+}
+
+#[tauri::command]
+pub fn delete_entry_version(state: State<AppState>, id: String) -> CmdResult<()> {
+    state.with(|w| w.conn.execute("DELETE FROM entry_versions WHERE id = ?1", [&id]).map(|_| ()).map_err(err))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn world() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        db::migrate_for_tests(&conn);
+        conn.execute_batch(
+            "INSERT INTO entry_types (id, name, plural) VALUES ('t', 'Place', 'Places');
+             INSERT INTO entries (id, type_id, title, body) VALUES
+               ('e', 't', 'Harbour', '{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Old stone quays\"}]}]}');",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn count(conn: &Connection, sql: &str) -> i64 {
+        conn.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn versions_keep_entry_content_and_skip_unchanged_automatic_ones() {
+        let conn = world();
+        assert!(save_entry_version(&conn, "v1", "e", "", true).unwrap());
+        assert!(!save_entry_version(&conn, "v2", "e", "", true).unwrap(), "nothing changed");
+        assert!(save_entry_version(&conn, "v3", "e", "Before the rewrite", false).unwrap(), "named ones are always kept");
+        let (data, words): (String, i64) = conn
+            .query_row("SELECT data, word_count FROM entry_versions WHERE id = 'v1'", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        let v: Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(v["title"], "Harbour");
+        assert_eq!(words, 3);
+
+        conn.execute("UPDATE entries SET summary = 'A busy port.' WHERE id = 'e'", []).unwrap();
+        assert!(save_entry_version(&conn, "v4", "e", "", true).unwrap(), "changed since the last version");
+    }
+
+    #[test]
+    fn automatic_versions_are_thinned_and_go_with_their_entry() {
+        let conn = world();
+        save_entry_version(&conn, "named", "e", "Keep me", false).unwrap();
+        for i in 0..(KEEP_AUTOMATIC_VERSIONS + 5) {
+            conn.execute("UPDATE entries SET summary = ?1 WHERE id = 'e'", [format!("Draft {i}")]).unwrap();
+            save_entry_version(&conn, &format!("a{i}"), "e", "", true).unwrap();
+        }
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM entry_versions WHERE automatic = 1"), KEEP_AUTOMATIC_VERSIONS);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM entry_versions WHERE id = 'named'"), 1);
+        conn.execute("DELETE FROM entries WHERE id = 'e'", []).unwrap();
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM entry_versions"), 0);
+    }
 }

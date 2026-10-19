@@ -122,8 +122,9 @@ fn write_pack(world: &OpenWorld, dest: &Path, omit_private: bool, app_version: &
         if omit_private {
             skip_assets = strip_private(&conn)?;
         }
-        // Conversations with the assistant are the author's own; they never travel with a shared world.
-        conn.execute_batch("DELETE FROM assistant_chats; VACUUM;").map_err(err)?;
+        // Conversations with the assistant and old versions of entries (which may hold things the
+        // author has since cut) are the author's own; they never travel with a shared world.
+        conn.execute_batch("DELETE FROM assistant_chats; DELETE FROM entry_versions; VACUUM;").map_err(err)?;
         drop(conn);
         zip_world(&world.path, &info(world)?.name, &snapshot, dest, &skip_assets, app_version)
     })();
@@ -277,7 +278,8 @@ mod tests {
              INSERT INTO entries (id, type_id, title, image, visibility) VALUES
                ('a', 't', 'Hero', 'hero.png', 'public'),
                ('b', 't', 'Villain', 'villain.png', 'private');
-             INSERT INTO assistant_chats (subject, data) VALUES ('entry:a', '{}');",
+             INSERT INTO assistant_chats (subject, data) VALUES ('entry:a', '{}');
+             INSERT INTO entry_versions (id, entry_id, data) VALUES ('v', 'a', '{}');",
         )
         .unwrap();
         let world = OpenWorld { path: world_dir, conn };
@@ -300,6 +302,8 @@ mod tests {
         assert_eq!(titles, vec!["Hero"]);
         let chats: i64 = copy.query_row("SELECT COUNT(*) FROM assistant_chats", [], |r| r.get(0)).unwrap();
         assert_eq!(chats, 0);
+        let versions: i64 = copy.query_row("SELECT COUNT(*) FROM entry_versions", [], |r| r.get(0)).unwrap();
+        assert_eq!(versions, 0);
         assert!(out.join(ASSETS_DIR).join("hero.png").exists());
         assert!(!out.join(ASSETS_DIR).join("villain.png").exists());
 

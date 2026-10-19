@@ -82,6 +82,9 @@ export type Visibility = "public" | "spoiler" | "private";
 /** Paragraph fields hold a rich-text document so they can contain @mentions. */
 export type FieldValue = string | number | boolean | string[] | JSONContent | null;
 
+/** What a saved version of an entry holds: everything the author writes in it. */
+export type EntryVersionData = Pick<Entry, "title" | "aliases" | "summary" | "body" | "fields" | "tags" | "image" | "emoji">;
+
 export interface Entry {
   id: string;
   typeId: string;

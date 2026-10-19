@@ -140,6 +140,19 @@ const MIGRATIONS: &[&str] = &[
     CREATE TRIGGER assistant_chats_doc_gone AFTER DELETE ON docs
         BEGIN DELETE FROM assistant_chats WHERE subject = 'doc:' || old.id; END;
     "#,
+    // v8: saved versions of codex entries (everything the author writes in them)
+    r#"
+    CREATE TABLE entry_versions (
+        id         TEXT PRIMARY KEY,
+        entry_id   TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL DEFAULT '',
+        automatic  INTEGER NOT NULL DEFAULT 0,
+        data       TEXT NOT NULL,
+        word_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+    );
+    CREATE INDEX entry_versions_by_entry ON entry_versions(entry_id, created_at);
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
@@ -151,6 +164,11 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     )?;
     migrate(&conn)?;
     Ok(conn)
+}
+
+#[cfg(test)]
+pub(crate) fn migrate_for_tests(conn: &Connection) {
+    migrate(conn).unwrap();
 }
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {

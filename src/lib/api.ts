@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { JSONContent } from "@tiptap/react";
 import type { WorldMap } from "./maps/model";
 import type {
+  EntryVersionData,
   Backlink,
   Calendar,
   TimelineItem,
@@ -38,6 +39,14 @@ export const api = {
   getEntry: (id: string) => invoke<Entry>("get_entry", { id }),
   saveEntry: (entry: Entry) => invoke<void>("save_entry", { entry }),
   deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
+  /** Saves the entry as it is now; an automatic version is skipped if nothing changed. Resolves to whether one was saved. */
+  createEntryVersion: (entryId: string, name: string, automatic = false) =>
+    invoke<boolean>("create_entry_version", { id: crypto.randomUUID(), entryId, name, automatic }),
+  listEntryVersions: (entryId: string) =>
+    invoke<{ id: string; name: string; automatic: boolean; wordCount: number; createdAt: string }[]>("list_entry_versions", { entryId }),
+  getEntryVersion: (id: string) => invoke<EntryVersionData>("get_entry_version", { id }),
+  renameEntryVersion: (id: string, name: string) => invoke<void>("rename_entry_version", { id, name }),
+  deleteEntryVersion: (id: string) => invoke<void>("delete_entry_version", { id }),
   backlinks: (id: string) => invoke<Backlink[]>("backlinks", { id }),
   search: (query: string, limit?: number) => invoke<SearchHit[]>("search", { query, limit }),
 
