@@ -2,6 +2,20 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.6
+
+Maps, a graph of your world, planning views, comments, backups, and AI assistants that help without writing for you.
+
+- **Maps**: draw your own (paint land, forests, lakes, regions, rivers, roads, routes and borders, stamp symbols, add labels) in Parchment, Atlas or Starchart style, generate a coastline to start from, or bring in any image. Pin entries onto any map, link pins to other maps, and export as PNG. Entries show which maps they're on.
+- **Graph**: see your whole world as a web of connections, filter by category, include chapters, and find anything. Every entry also shows a small graph of what it's connected to.
+- **Cards and Outline**: plan a book on index cards (drag to reorder) or in an outline table, with statuses and colour labels you can customise per book.
+- **Comments**: select text and leave yourself a note in the margin. Resolve them when done; they never appear in exports.
+- **Backups**: your worlds are backed up automatically, without filling your disk. Nothing is saved if nothing changed, older backups are thinned out, and each world has a size limit. Restore any backup as a copy from Settings.
+- **Spelling**: Eardloom now has its own spellchecker (UK or US English). Right-click a word to **Learn** it for this world, and every entry name counts as spelt correctly.
+- **AI assistants**: connect your own Claude or Codex app in Settings and ask it about your world. It can look things up, review your chapters and suggest new entries, comments and small line edits, which you approve or skip in Eardloom. It's there to help you write, not to write for you.
+
+This update upgrades your worlds' storage. After updating, older versions of Eardloom can't open them.
+
 ## 0.1.5
 
 Snapshots of your chapters, and pasted text keeps its formatting.

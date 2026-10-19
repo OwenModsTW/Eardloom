@@ -766,6 +766,45 @@ mod tests {
         assert!(!names.iter().any(|n| n.contains("write") || n.contains("create_chapter") || n.contains("append")));
     }
 
+    /// Upgrades a copy of a real world and reads everything back. Run by hand:
+    /// `EARDLOOM_TEST_DB=path/to/copy/world.db cargo test real_world -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_world_upgrades_and_reads() {
+        let Ok(path) = std::env::var("EARDLOOM_TEST_DB") else { return };
+        let before: i64 = Connection::open(&path).unwrap().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        let conn = db::open(std::path::Path::new(&path)).expect("upgrade");
+        let after: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        println!("schema v{before} -> v{after}");
+        println!(
+            "entries {} | categories {} | books {} | documents {} | snapshots {} | links {} | maps {} | comments {}",
+            count("SELECT COUNT(*) FROM entries"),
+            count("SELECT COUNT(*) FROM entry_types"),
+            count("SELECT COUNT(*) FROM projects"),
+            count("SELECT COUNT(*) FROM docs"),
+            count("SELECT COUNT(*) FROM snapshots"),
+            count("SELECT COUNT(*) FROM links"),
+            count("SELECT COUNT(*) FROM maps"),
+            count("SELECT COUNT(*) FROM comments"),
+        );
+        println!("integrity: {}", conn.query_row("PRAGMA integrity_check", [], |r| r.get::<_, String>(0)).unwrap());
+        // Every reader the assistant uses, against real data.
+        assert!(world_overview(&conn, false).is_ok());
+        assert!(list_entries(&conn, None, true).is_ok());
+        assert!(read_timeline(&conn).is_ok());
+        assert!(list_books(&conn).is_ok());
+        let ids: Vec<String> = conn.prepare("SELECT id FROM entries").unwrap().query_map([], |r| r.get(0)).unwrap().flatten().collect();
+        for id in &ids {
+            read_entry(&conn, id, true).expect("read entry");
+        }
+        let docs: Vec<String> = conn.prepare("SELECT id FROM docs WHERE kind = 'text'").unwrap().query_map([], |r| r.get(0)).unwrap().flatten().collect();
+        for id in &docs {
+            read_chapter(&conn, id).expect("read chapter");
+        }
+        println!("read {} entries and {} chapters without errors", ids.len(), docs.len());
+    }
+
     #[test]
     fn reads_a_world() {
         let path = std::env::temp_dir().join(format!("eardloom-ai-{}.db", std::process::id()));
