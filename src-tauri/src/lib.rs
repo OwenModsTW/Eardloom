@@ -41,6 +41,7 @@ pub fn run() {
             codex::backlinks,
             codex::search,
             codex::incoming_link_counts,
+            codex::link_graph,
             writing::list_projects,
             writing::save_project,
             writing::delete_project,

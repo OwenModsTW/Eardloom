@@ -12,7 +12,8 @@ export type Route =
   | { view: "schema"; typeId?: string }
   | { view: "settings" }
   | { view: "timeline" }
-  | { view: "calendar" };
+  | { view: "calendar" }
+  | { view: "graph"; focus?: string };
 
 interface State {
   world: WorldInfo | null;

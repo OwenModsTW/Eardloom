@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Plus, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Plus, Search, Waypoints } from "lucide-react";
 import { useStore } from "../store";
 import { api } from "../lib/api";
 import { TypeIcon } from "../lib/icons";
@@ -14,6 +14,7 @@ import { SearchPalette } from "./SearchPalette";
 import { Settings } from "./Settings";
 import { TimelineView } from "./TimelineView";
 import { CalendarEditor } from "./CalendarEditor";
+import { GraphView } from "./GraphView";
 import { openMenu } from "./ContextMenu";
 import { setKnownWords } from "../lib/spell";
 import { startAutoBackups } from "../lib/backup";
@@ -109,6 +110,10 @@ export function Shell() {
           <Hourglass size={14} className="type-glyph" />
           <span>Timeline</span>
         </button>
+        <button className={`nav-item ${route.view === "graph" ? "active" : ""}`} onClick={() => go({ view: "graph" })}>
+          <Waypoints size={14} className="type-glyph" />
+          <span>Graph</span>
+        </button>
         <button className={`nav-item ${route.view === "schema" ? "active" : ""}`} onClick={() => go({ view: "schema" })}>
           <LayoutGrid size={14} className="type-glyph" />
           <span>Structure</span>
@@ -168,6 +173,7 @@ export function Shell() {
         {route.view === "settings" && <Settings />}
         {route.view === "timeline" && <TimelineView />}
         {route.view === "calendar" && <CalendarEditor />}
+        {route.view === "graph" && <GraphView key={route.focus ?? ""} focus={route.focus} />}
       </main>
 
       {paletteOpen && <SearchPalette />}

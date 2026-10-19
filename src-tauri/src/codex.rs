@@ -395,3 +395,59 @@ pub fn incoming_link_counts(state: State<AppState>) -> CmdResult<std::collection
         rows.collect::<Result<_, _>>().map_err(err)
     })
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphLink {
+    pub source_kind: String,
+    pub source_id: String,
+    pub target_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphDoc {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+}
+
+#[derive(Serialize)]
+pub struct Graph {
+    pub links: Vec<GraphLink>,
+    pub docs: Vec<GraphDoc>,
+}
+
+/// Every link in the world (one per source/target pair), plus the documents that
+/// mention entries, for the graph view.
+#[tauri::command]
+pub fn link_graph(state: State<AppState>) -> CmdResult<Graph> {
+    state.with(|w| {
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT DISTINCT l.source_kind, l.source_id, l.target_id FROM links l
+                  WHERE l.target_id IN (SELECT id FROM entries)
+                    AND (l.source_kind = 'doc' OR l.source_id IN (SELECT id FROM entries))",
+            )
+            .map_err(err)?;
+        let links = stmt
+            .query_map([], |r| Ok(GraphLink { source_kind: r.get(0)?, source_id: r.get(1)?, target_id: r.get(2)? }))
+            .map_err(err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(err)?;
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT d.id, d.project_id, d.title FROM docs d
+                  WHERE d.id IN (SELECT source_id FROM links WHERE source_kind = 'doc')",
+            )
+            .map_err(err)?;
+        let docs = stmt
+            .query_map([], |r| Ok(GraphDoc { id: r.get(0)?, project_id: r.get(1)?, title: r.get(2)? }))
+            .map_err(err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(err)?;
+        Ok(Graph { links, docs })
+    })
+}

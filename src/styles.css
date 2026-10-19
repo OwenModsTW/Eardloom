@@ -945,3 +945,20 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .manuscript-tools .icon-btn { position: relative; }
 .tool-badge { position: absolute; top: -3px; right: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
 .binder-comments { font-size: 10.5px; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 7px; padding: 0 5px; line-height: 14px; }
+
+/* ---------- graph ---------- */
+.graph-page { height: 100%; display: flex; flex-direction: column; }
+.graph-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line); }
+.graph-bar h1 { font: 600 22px var(--serif); margin: 0 8px 0 0; }
+.graph-bar .search-inline { width: 180px; }
+.graph-bar .timeline-filters { margin: 0; }
+.graph-count { margin: 0; font-variant-numeric: tabular-nums; }
+.graph-canvas { position: relative; flex: 1; min-height: 0; background:
+  radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--teal-deep) 18%, transparent), transparent 70%); }
+.graph-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.graph-canvas.compact { height: 280px; flex: none; border: 1px solid var(--line); border-radius: var(--r); }
+.graph-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; padding: 5px 9px; border-radius: var(--r); background: var(--bg-raised); box-shadow: var(--shadow); font-size: 13px; }
+.graph-tip small { color: var(--muted); font-size: 11.5px; }
+.local-graph { margin-top: 32px; }
+.local-graph h3 { display: flex; align-items: center; gap: 12px; font: 600 12px var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding-bottom: 5px; border-bottom: 1px solid var(--line-strong); margin-bottom: 8px; }
+.local-graph h3 .link { text-transform: none; letter-spacing: 0; }

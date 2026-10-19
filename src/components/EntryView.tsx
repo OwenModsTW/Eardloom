@@ -12,6 +12,7 @@ import { Select } from "./Select";
 import { assetUrl, EntryGlyph } from "./EntryIcon";
 import { EmojiPicker } from "./EmojiPicker";
 import { ShareCard } from "./ShareCard";
+import { LocalGraph } from "./GraphView";
 import { openMenu, type MenuItem } from "./ContextMenu";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
 
@@ -197,6 +198,7 @@ function EntryEditor({ initial }: { initial: Entry }) {
             placeholder="Write the article. Type @ to link anything else in your world."
           />
           <Backlinks id={entry.id} />
+          <LocalGraph id={entry.id} />
         </div>
 
         <aside className="infobox" style={{ "--chip": type?.color } as React.CSSProperties} onContextMenu={(e) => openMenu(e, menu)}>
