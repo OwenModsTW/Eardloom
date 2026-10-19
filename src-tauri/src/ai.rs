@@ -41,7 +41,7 @@ pub struct AiState {
     include_private: Mutex<bool>,
 }
 
-fn random_token() -> String {
+pub(crate) fn random_token() -> String {
     let mut bytes = [0u8; 24];
     getrandom::fill(&mut bytes).expect("system random source");
     bytes.iter().map(|b| format!("{b:02x}")).collect()

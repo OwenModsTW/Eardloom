@@ -2,6 +2,7 @@ mod ai;
 mod backup;
 mod codex;
 mod db;
+mod local_ai;
 mod maps;
 mod share;
 mod timeline;
@@ -27,6 +28,7 @@ pub fn run() {
     builder
         .manage(world::AppState::default())
         .manage(ai::AiState::default())
+        .manage(local_ai::LocalAi::default())
         // The AI connector is always available while Eardloom is open.
         .setup(|app| {
             if let Err(e) = ai::ensure_server(app.handle()) {
@@ -67,6 +69,14 @@ pub fn run() {
             ai::connect_claude_code,
             ai::assistant_set_private,
             ai::assistant_resolve,
+            local_ai::local_ai_status,
+            local_ai::local_ai_hardware,
+            local_ai::local_ai_install,
+            local_ai::local_ai_cancel_download,
+            local_ai::local_ai_remove,
+            local_ai::local_ai_start,
+            local_ai::local_ai_stop,
+            local_ai::local_ai_chat,
             writing::list_projects,
             writing::save_project,
             writing::delete_project,
@@ -97,6 +107,12 @@ pub fn run() {
             timeline::save_calendar,
             timeline::timeline_items,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // The built-in assistant's engine never outlives Eardloom.
+            if let tauri::RunEvent::Exit = event {
+                local_ai::shutdown(app);
+            }
+        });
 }
