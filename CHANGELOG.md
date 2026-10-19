@@ -2,6 +2,14 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.7
+
+A built-in writing assistant that runs entirely on your computer, if you want it.
+
+- **Built-in assistant** (off until you turn it on in Settings): chat about your world without any account or subscription. It runs on your own computer, using your graphics card when it has one, and your conversations never leave it. Choose a model to suit your hardware; Eardloom recommends one and downloads it once. Like the connected assistants, it can look things up, review chapters and suggest entries, comments and small line edits for you to approve, but it won't write your book. It starts when you use it, stops after ten minutes idle, and always closes with Eardloom. Open it from the sidebar or with Ctrl+J.
+- **Connecting other AI apps**: one-click Connect for Claude Code, and Eardloom now asks you to quit Claude Desktop before connecting it, so the change isn't lost.
+- **About**: Settings now shows the version, a privacy statement, and the licences of the open-source projects Eardloom is built with.
+
 ## 0.1.6
 
 Maps, a graph of your world, planning views, comments, backups, and AI assistants that help without writing for you.
