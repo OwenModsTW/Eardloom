@@ -58,8 +58,8 @@ export function LocalAiSettings() {
       <h2>Built-in assistant</h2>
       <p className="hint">
         An AI that runs entirely on this computer: no account, no cost and nothing sent anywhere. It helps you build your
-        world and reviews your writing; it won't write your book for you. It's a smaller model than the big online AIs, so
-        it's best for brainstorming, questions about your world and quick feedback.
+        world, writing and expanding lore entries with you, and reviews your chapters. Your books stay yours: it gives
+        feedback on your story but won't write it. It's a smaller model than the big online AIs, so check what it writes.
       </p>
       <label className="check">
         <input type="checkbox" checked={enabled} onChange={(e) => setPrefs({ enabled: e.target.checked })} />

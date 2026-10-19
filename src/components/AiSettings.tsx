@@ -53,8 +53,8 @@ export function AiSettings() {
       <h2>Connect another AI app</h2>
       <p className="hint">
         Use your own AI app with your world. Connect Claude or Codex here, then talk to them as usual: they can look things
-        up in your world, review your chapters and suggest changes. Nothing changes until you approve it in Eardloom, and
-        they're set up to help you write, not to write for you.
+        up in your world, write and expand lore entries, and review your chapters. Nothing changes until you approve it in
+        Eardloom. Your books stay yours: they'll give feedback on your story, but won't write it.
       </p>
       {status && (
         <div className="ai-apps">

@@ -1,20 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowUp, BookOpen, Globe, RotateCcw, ScrollText, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, BookOpen, Globe, RotateCcw, ScrollText, Sparkles, Square, Undo2, X } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
 import { localAi, useLocalAi } from "../lib/localAi";
-import { applyProposal } from "../lib/ai/apply";
+import { applyProposal, restoreEntry } from "../lib/ai/apply";
 import { useActiveEditor } from "../lib/editor/comment";
 import { Markdown } from "./Markdown";
 import { ProposalDetails, PROPOSAL_TITLES } from "./AiProposals";
+import type { Entry } from "../lib/types";
 
 type Item =
   | { kind: "user"; id: string; text: string }
   | { kind: "assistant"; id: string; text: string; thinking: string; done: boolean }
   | { kind: "activity"; id: string; text: string }
-  | { kind: "proposal"; id: string; tool: string; args: Record<string, unknown>; status: "waiting" | "applied" | "skipped" | "failed"; outcome?: string };
+  | {
+      kind: "proposal";
+      id: string;
+      tool: string;
+      args: Record<string, unknown>;
+      status: "waiting" | "applied" | "skipped" | "failed";
+      outcome?: string;
+      /** The entry as it was before this change, so it can be undone. */
+      undo?: Entry;
+      undone?: boolean;
+    };
 
 type ApiMessage = { role: "system" | "user" | "assistant" | "tool"; content: string; tool_calls?: ToolCall[]; tool_call_id?: string };
 interface ToolCall {
@@ -32,12 +43,12 @@ interface Saved {
 }
 
 const SYSTEM = `You are the assistant built into Eardloom, the author's worldbuilding and writing app, running privately on their computer.
-You are here to ASSIST: help build the world, answer questions about it, review the author's writing, and make suggestions.
-Never write books, chapters or scenes for the author, even if asked. Offer ideas, questions, options and brief advice instead; the writing is theirs.
-Keep to what the world below establishes. If something isn't there, say so rather than inventing it, and point out contradictions you notice.
-Use the tools to look things up. To change anything (new entries, entry details, comments on chapters, short line edits) use a propose tool: the author approves or skips each one.
-An entry's summary is one or two sentences under its title. Descriptions, history, culture and other detail belong in its article: use add_to_article (or article for a new entry), never a long summary.
-Be concise and warm. Use short paragraphs or lists.`;
+You help with two things, under different rules:
+- LORE (the codex: entries for characters, places, peoples, history, magic, technology and so on): you're a full collaborator. When asked, write or rewrite complete entry articles, fill in fields, and propose new entries. Build on what the world establishes and flag anything that contradicts it.
+- STORY (the author's books and chapters): the writing is theirs alone. Never write or continue chapters, scenes, dialogue or narrative prose, even if asked; politely say so. You may review, comment, ask questions, discuss ideas and suggest short line edits.
+Use the tools to look things up. To change anything use a propose tool; the author approves or skips each one.
+For entries: the summary is one or two sentences under the title. Descriptions, history, culture and other detail go in the article: add_to_article adds to it, rewrite_article replaces it (use that when asked to rewrite, restructure or expand the whole thing), and a new entry takes article. Articles can use Markdown headings (##), lists and bold.
+Be concise and warm in conversation.`;
 
 const ACTIVITY: Record<string, (a: Record<string, unknown>) => string> = {
   world_overview: () => "Looked at the world overview",
@@ -247,17 +258,29 @@ export function AssistantPanel() {
     decisions.current.delete(item.id);
     // A suggestion from an earlier session: the assistant hears about it with the next message.
     const resolve = waiting ?? ((outcome: string) => notes.current.push(`${PROPOSAL_TITLES[item.tool] ?? "Suggestion"}: ${outcome}`));
+    const keep = (entry: Entry) => patch(item.id, { undo: entry });
     if (!apply) {
       patch(item.id, { status: "skipped" });
       return resolve("The author skipped this suggestion.");
     }
     try {
-      const outcome = await applyProposal(item.tool, item.args);
+      const outcome = await applyProposal(item.tool, item.args, keep);
       patch(item.id, { status: outcome.startsWith("Couldn't") || outcome.startsWith("There's no") ? "failed" : "applied", outcome });
       resolve(outcome);
     } catch (e) {
       patch(item.id, { status: "failed", outcome: String(e) });
       resolve(`Applying it failed: ${String(e)}`);
+    }
+  };
+
+  const undo = async (item: Extract<Item, { kind: "proposal" }>) => {
+    if (!item.undo) return;
+    try {
+      const outcome = await restoreEntry(item.undo);
+      patch(item.id, { undone: true, outcome });
+      notes.current.push(`The author undid your change to "${item.undo.title}".`);
+    } catch (e) {
+      setError(`Couldn't undo: ${String(e)}`);
     }
   };
 
@@ -321,7 +344,7 @@ export function AssistantPanel() {
             messages: [system, ...recent(history.current, SEND_BUDGET)],
             tools,
             temperature: 0.6,
-            max_tokens: 1500,
+            max_tokens: 3000,
             chat_template_kwargs: { enable_thinking: thinking },
           },
         });
@@ -373,7 +396,14 @@ export function AssistantPanel() {
             </button>
           </footer>
         ) : (
-          <footer className="outcome">{it.status === "skipped" ? "Skipped" : it.outcome}</footer>
+          <footer className="outcome">
+            <span>{it.status === "skipped" ? "Skipped" : it.outcome}</span>
+            {it.undo && it.status === "applied" && !it.undone && (
+              <button className="ghost tiny" onClick={() => undo(it)} disabled={busy} title="Put the entry back as it was before this change">
+                <Undo2 size={12} /> Undo
+              </button>
+            )}
+          </footer>
         )}
       </article>
     );
@@ -425,7 +455,7 @@ export function AssistantPanel() {
                 </>
               )}
             </ul>
-            <p className="hint">It can suggest changes, but nothing happens until you approve it. It won't write your story for you.</p>
+            <p className="hint">It can write lore for your entries; nothing changes until you approve it, and you can undo. Your books stay yours: it gives feedback, but won't write your story.</p>
           </div>
         )}
         {items.map((it, i) => [

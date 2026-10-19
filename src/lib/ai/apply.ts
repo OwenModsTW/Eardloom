@@ -10,6 +10,7 @@ import { api, newId } from "../api";
 import { useStore } from "../../store";
 import { CommentMark, useActiveEditor } from "../editor/comment";
 import { findMatches } from "../editor/search";
+import { parseInline, parseMarkdown } from "../markdown";
 import type { Entry, EntrySummary, FieldDef, FieldValue } from "../types";
 
 type Args = Record<string, unknown>;
@@ -25,6 +26,27 @@ export function paragraphs(text: string): JSONContent[] {
     .map((p) => p.replace(/\s*\n\s*/g, " ").trim())
     .filter(Boolean)
     .map((p) => ({ type: "paragraph", content: [{ type: "text", text: p }] }));
+}
+
+function inlineContent(text: string): JSONContent[] {
+  return parseInline(text).map((s) => {
+    const marks = [s.bold && "bold", s.italic && "italic", s.code && "code"].filter((m): m is string => !!m).map((type) => ({ type }));
+    return marks.length ? { type: "text", text: s.text, marks } : { type: "text", text: s.text };
+  });
+}
+
+/** An article the assistant wrote (Markdown) as formatted entry text: headings, lists, rules, bold and italics. */
+export function articleContent(text: string): JSONContent[] {
+  const para = (t: string): JSONContent => ({ type: "paragraph", content: inlineContent(t) });
+  return parseMarkdown(text).map((b): JSONContent => {
+    if (b.kind === "h") return { type: "heading", attrs: { level: Math.min(Math.max(b.level, 2), 4) }, content: inlineContent(b.text) };
+    if (b.kind === "hr") return { type: "horizontalRule" };
+    if (b.kind === "p") return para(b.lines.join(" "));
+    return {
+      type: b.kind === "ul" ? "bulletList" : "orderedList",
+      content: b.items.map((item) => ({ type: "listItem", content: [para(item)] })),
+    };
+  });
 }
 
 function findEntry(key: string): EntrySummary | undefined {
@@ -130,8 +152,17 @@ async function withChapter(docId: string, change: (editor: Editor) => string | n
   }
 }
 
-/** Applies an approved proposal; the returned text is what the AI is told happened. */
-export async function applyProposal(tool: string, args: Args): Promise<string> {
+/** Puts an entry back as it was before an assistant's change. */
+export async function restoreEntry(previous: Entry): Promise<string> {
+  await saveEntry(previous);
+  return `Undid the change to "${previous.title}".`;
+}
+
+/**
+ * Applies an approved proposal; the returned text is what the AI is told happened.
+ * `before` receives an entry as it was before it changed, so the change can be undone.
+ */
+export async function applyProposal(tool: string, args: Args, before?: (entry: Entry) => void): Promise<string> {
   const { types } = useStore.getState();
   const notes: string[] = [];
   const withNotes = (msg: string) => (notes.length ? `${msg} Notes: ${notes.join(" ")}` : msg);
@@ -149,7 +180,7 @@ export async function applyProposal(tool: string, args: Args): Promise<string> {
       title,
       aliases: strList(args.aliases),
       summary: str(args.summary),
-      body: article ? { type: "doc", content: paragraphs(article) } : null,
+      body: article ? { type: "doc", content: articleContent(article) } : null,
       fields: convertFields(type.fields, args.fields, notes),
       tags: strList(args.tags),
       image: null,
@@ -165,15 +196,22 @@ export async function applyProposal(tool: string, args: Args): Promise<string> {
     if (!found) return `There's no entry called "${args.entry}".`;
     const entry = await api.getEntry(found.id);
     const type = types.find((t) => t.id === entry.typeId);
+    const rewrite = str(args.rewrite_article);
     const add = str(args.add_to_article) || str(args.article);
+    const body = rewrite
+      ? { type: "doc", content: [...articleContent(rewrite), ...(add ? articleContent(add) : [])] }
+      : add
+        ? { type: "doc", content: [...(entry.body?.content ?? []), ...articleContent(add)] }
+        : entry.body;
     const next: Entry = {
       ...entry,
       summary: str(args.summary) || entry.summary,
       aliases: [...new Set([...entry.aliases, ...strList(args.add_aliases)])],
       tags: [...new Set([...entry.tags, ...strList(args.add_tags)])],
       fields: { ...entry.fields, ...convertFields(type?.fields ?? [], args.fields, notes) },
-      body: add ? { type: "doc", content: [...(entry.body?.content ?? []), ...paragraphs(add)] } : entry.body,
+      body,
     };
+    before?.(entry);
     await saveEntry(next);
     return withNotes(`Updated "${entry.title}".`);
   }

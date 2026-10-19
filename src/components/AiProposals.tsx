@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Sparkles } from "lucide-react";
 import { useStore } from "../store";
 import { applyProposal } from "../lib/ai/apply";
+import { Markdown } from "./Markdown";
 
 interface Proposal {
   id: string;
@@ -41,7 +42,11 @@ export function ProposalDetails({ tool, args }: { tool: string; args: Record<str
               ))}
             </dl>
           )}
-          {a.article && <p className="ai-article">{String(a.article)}</p>}
+          {a.article && (
+            <div className="ai-article">
+              <Markdown text={String(a.article)} />
+            </div>
+          )}
         </>
       );
     case "propose_entry_changes":
@@ -68,11 +73,17 @@ export function ProposalDetails({ tool, args }: { tool: string; args: Record<str
           )}
           {Array.isArray(a.add_aliases) && a.add_aliases.length > 0 && <p className="hint">Also known as: {a.add_aliases.join(", ")}</p>}
           {Array.isArray(a.add_tags) && a.add_tags.length > 0 && <p className="hint">Tags: {a.add_tags.join(", ")}</p>}
+          {Boolean(a.rewrite_article) && (
+            <div className="ai-article">
+              <p className="hint">Replaces the whole article with:</p>
+              <Markdown text={String(a.rewrite_article)} />
+            </div>
+          )}
           {Boolean(a.add_to_article || a.article) && (
-            <p className="ai-article">
-              <span className="hint">Add to article: </span>
-              {String(a.add_to_article || a.article)}
-            </p>
+            <div className="ai-article">
+              <p className="hint">Adds to the article:</p>
+              <Markdown text={String(a.add_to_article || a.article)} />
+            </div>
           )}
         </>
       );
