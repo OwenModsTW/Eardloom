@@ -2,24 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { useStore } from "../store";
-import { canvasToPng, fieldText, renderCard, type CardLayout, type CardOptions, type CardTheme } from "../lib/export/card";
+import { canvasToPng, fieldText, renderCard, saveCardPrefs, savedCardPrefs, type CardLayout, type CardOptions, type CardTheme } from "../lib/export/card";
 import type { Entry } from "../lib/types";
 
-const PREFS = "eardloom.card";
-
-function loadPrefs(): Partial<CardOptions> {
-  try {
-    return JSON.parse(localStorage.getItem(PREFS) ?? "{}");
-  } catch {
-    return {};
-  }
-}
 
 /** Renders an entry as a presentable image to save or paste into a chat. */
 export function ShareCard({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const type = useStore((s) => s.types.find((t) => t.id === entry.typeId));
   const notify = useStore((s) => s.notify);
-  const prefs = useMemo(loadPrefs, []);
+  const prefs = useMemo(savedCardPrefs, []);
 
   // Offer only fields that have something in them; pre-tick the first few short ones.
   const filled = useMemo(
@@ -45,11 +36,7 @@ export function ShareCard({ entry, onClose }: { entry: Entry; onClose: () => voi
       canvas.current = c;
       setPreview(c.toDataURL("image/png"));
     });
-    try {
-      localStorage.setItem(PREFS, JSON.stringify({ layout, theme, showSummary, showWorld }));
-    } catch {
-      /* preference only */
-    }
+    saveCardPrefs({ layout, theme, showSummary, showWorld });
     return () => {
       alive = false;
     };

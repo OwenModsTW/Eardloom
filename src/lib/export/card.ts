@@ -254,3 +254,40 @@ export async function renderCard(entry: Entry, type: EntryType | undefined, opts
 export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't render image"))), "image/png"));
 }
+
+const CARD_PREFS = "eardloom.card";
+
+/** The card settings last used in the share dialog (layout, theme, what to show). */
+export function savedCardPrefs(): Partial<CardOptions> {
+  try {
+    return JSON.parse(localStorage.getItem(CARD_PREFS) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function saveCardPrefs(prefs: Partial<CardOptions>) {
+  try {
+    localStorage.setItem(CARD_PREFS, JSON.stringify(prefs));
+  } catch {
+    /* preference only */
+  }
+}
+
+/** The first few short fields that have something in them: what a card shows by default. */
+export function defaultCardFields(entry: Entry, type: EntryType | undefined) {
+  return (type?.fields ?? []).filter((f) => f.kind !== "longtext" && fieldText(entry.fields[f.id], f.kind)).slice(0, 6).map((f) => f.id);
+}
+
+/** Copies an entry's card to the clipboard as a picture, with the last-used settings. */
+export async function copyCard(entry: Entry, type: EntryType | undefined) {
+  const p = savedCardPrefs();
+  const canvas = await renderCard(entry, type, {
+    layout: p.layout ?? "portrait",
+    theme: p.theme ?? "dark",
+    showSummary: p.showSummary ?? true,
+    showWorld: p.showWorld ?? true,
+    fieldIds: defaultCardFields(entry, type),
+  });
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": canvasToPng(canvas) })]);
+}

@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { Copy, History, ImagePlus, LayoutTemplate, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
+import { ClipboardCopy, Copy, FileDown, FileText, Globe, History, Image as ImageIcon, ImagePlus, LayoutTemplate, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
@@ -18,6 +18,7 @@ import { EntryHistory } from "./EntryHistory";
 import { FamilyTree } from "./FamilyTree";
 import { fieldsById } from "../lib/relations";
 import { saveAsTemplate } from "../lib/entryTemplates";
+import { shareEntry } from "../lib/shareEntry";
 import { askText } from "./Prompt";
 import { registerEntryFlush, useEntryRevision } from "../lib/entrySync";
 import type { Backlink, Entry, EntryType, FieldDef, FieldValue, Visibility } from "../lib/types";
@@ -147,7 +148,8 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
     },
     { label: "History…", icon: <History size={14} />, onClick: () => (flush(), setHistory(true)) },
     ...(inFamilies ? [{ label: "Family tree", icon: <Network size={14} />, onClick: () => (flush(), setFamily(true)) }] : []),
-    { label: "Share as image…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
+    { label: "Copy as picture", icon: <ImageIcon size={14} />, onClick: () => shareEntry(entry, "picture") },
+    { label: "Picture options…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: "Duplicate", icon: <Copy size={14} />, onClick: () => (flush(), duplicateEntry(entry.id)) },
     {
       label: "Save as template…",
@@ -174,6 +176,18 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
       onClick: async () => (await confirmDeleteEntry(entry.id, entry.title)) && go({ view: "type", typeId: entry.typeId }),
     },
   ];
+
+  const share = (e: React.MouseEvent) =>
+    openMenu(e, [
+      { label: "Copy as picture", icon: <ImageIcon size={14} />, onClick: () => shareEntry(entry, "picture") },
+      { label: "Picture options…", icon: <Share2 size={14} />, onClick: () => setSharing(true) },
+      { label: "Copy as text", icon: <ClipboardCopy size={14} />, onClick: () => shareEntry(entry, "text") },
+      "separator",
+      { label: "Save as PDF…", icon: <FileDown size={14} />, onClick: () => (flush(), shareEntry(entry, "pdf")) },
+      { label: "Save as Word document…", icon: <FileText size={14} />, onClick: () => (flush(), shareEntry(entry, "docx")) },
+      { label: "Save as web page…", icon: <Globe size={14} />, onClick: () => (flush(), shareEntry(entry, "html")) },
+      { label: "Save as Markdown…", icon: <FileText size={14} />, onClick: () => (flush(), shareEntry(entry, "md")) },
+    ]);
 
   const image = assetUrl(world.assetsPath, entry.image);
 
@@ -202,8 +216,8 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
             <button className="ghost tiny" onClick={() => (flush(), setHistory(true))} title="Earlier versions of this entry">
               <History size={13} /> History
             </button>
-            <button className="ghost tiny" onClick={() => setSharing(true)} title="Make a shareable image of this entry">
-              Share
+            <button className="ghost tiny" onClick={share} title="Copy as a picture or text, or save as PDF, Word, a web page or Markdown">
+              <Share2 size={13} /> Share
             </button>
             <button className="icon-btn" onClick={(e) => openMenu(e, menu)} aria-label="More actions">
               <MoreHorizontal size={16} />

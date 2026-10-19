@@ -1,19 +1,30 @@
 import { useEffect, useState } from "react";
 import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
-import { exists } from "@tauri-apps/plugin-fs";
+import { exists, writeFile } from "@tauri-apps/plugin-fs";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "../lib/api";
 import { useStore } from "../store";
 import { buildSite } from "../lib/export/site";
+import { buildSingleFile } from "../lib/export/single";
+import { worldGuideDocx, worldGuideMarkdown, worldGuidePdf } from "../lib/export/entry";
+import type { Entry } from "../lib/types";
 
-type Mode = "site" | "pack";
+type Mode = "file" | "guide" | "site" | "pack";
+type GuideFormat = "pdf" | "docx" | "md";
+
+const GUIDE: Record<GuideFormat, { ext: string; name: string }> = {
+  pdf: { ext: "pdf", name: "PDF" },
+  docx: { ext: "docx", name: "Word document" },
+  md: { ext: "md", name: "Markdown" },
+};
 
 const safeName = (s: string) => s.replace(/[<>:"/\\|?*]/g, "").trim() || "World";
 
-/** Share a whole world: as a wiki website, or as a world pack another Eardloom can open. */
+/** Share a whole world: one file anyone can open, a printable guide, a website, or a world pack for Eardloom. */
 export function ShareWorld({ onClose }: { onClose: () => void }) {
   const { world, types, notify } = useStore();
-  const [mode, setMode] = useState<Mode>("site");
+  const [mode, setMode] = useState<Mode>("file");
+  const [format, setFormat] = useState<GuideFormat>("pdf");
   const [includeSpoilers, setIncludeSpoilers] = useState(true);
   const [omitPrivate, setOmitPrivate] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -47,6 +58,52 @@ export function ShareWorld({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // One .html file with every shared page, the search and the images inside it.
+  const exportFile = async () => {
+    const dest = await save({ defaultPath: `${safeName(world.name)}.html`, filters: [{ name: "Web page", extensions: ["html"] }] });
+    if (!dest) return;
+    setBusy("Building pages…");
+    try {
+      const { html, count } = await buildSingleFile(world, types, { includeSpoilers }, useStore.getState().calendar);
+      setBusy("Saving…");
+      await writeFile(dest, new TextEncoder().encode(html));
+      notify(`Saved ${count} entries in one file`);
+      revealItemInDir(dest).catch(() => {});
+      onClose();
+    } catch (e) {
+      setError(String(e));
+      setBusy(null);
+    }
+  };
+
+  // Every shared entry, grouped by category, as a document to read or print.
+  const exportGuide = async () => {
+    const f = GUIDE[format];
+    const dest = await save({ defaultPath: `${safeName(world.name)} guide.${f.ext}`, filters: [{ name: f.name, extensions: [f.ext] }] });
+    if (!dest) return;
+    setBusy("Gathering entries…");
+    try {
+      const all: Entry[] = [];
+      for (const e of useStore.getState().entries) all.push(await api.getEntry(e.id));
+      const shared = all.filter((e) => e.visibility === "public" || (includeSpoilers && e.visibility === "spoiler"));
+      setBusy(`Making ${f.name}…`);
+      const title = `${world.name}`;
+      const bytes =
+        format === "pdf"
+          ? await worldGuidePdf(title, shared)
+          : format === "docx"
+            ? await worldGuideDocx(title, shared)
+            : new TextEncoder().encode(worldGuideMarkdown(title, shared));
+      await writeFile(dest, bytes);
+      notify(`World guide saved with ${shared.length} entries`);
+      revealItemInDir(dest).catch(() => {});
+      onClose();
+    } catch (e) {
+      setError(String(e));
+      setBusy(null);
+    }
+  };
+
   const exportPack = async () => {
     const dest = await save({
       defaultPath: `${safeName(world.name)}.eardloom`,
@@ -73,6 +130,17 @@ export function ShareWorld({ onClose }: { onClose: () => void }) {
         </header>
         <div className="share-world-body">
           <div className="format-list">
+            <button className={mode === "file" ? "on" : ""} onClick={() => setMode("file")}>
+              <strong>One file to send</strong>
+              <small>
+                Your world as a single web page file. Send it like any attachment; it opens in any browser, on a computer or
+                phone, with search, links and pictures, no Eardloom or internet needed.
+              </small>
+            </button>
+            <button className={mode === "guide" ? "on" : ""} onClick={() => setMode("guide")}>
+              <strong>World guide</strong>
+              <small>Every shared entry, grouped by category, as a PDF, Word document or Markdown file to read or print.</small>
+            </button>
             <button className={mode === "site" ? "on" : ""} onClick={() => setMode("site")}>
               <strong>Wiki website</strong>
               <small>
@@ -86,13 +154,24 @@ export function ShareWorld({ onClose }: { onClose: () => void }) {
             </button>
           </div>
 
-          {mode === "site" ? (
+          {mode === "guide" && (
+            <div className="segmented">
+              {(Object.keys(GUIDE) as GuideFormat[]).map((k) => (
+                <button key={k} className={format === k ? "on" : ""} onClick={() => setFormat(k)}>
+                  {GUIDE[k].name}
+                </button>
+              ))}
+            </div>
+          )}
+          {mode !== "pack" ? (
             <>
               <label className="check">
                 <input type="checkbox" checked={includeSpoilers} onChange={(e) => setIncludeSpoilers(e.target.checked)} />
                 <span>
                   Include spoiler entries
-                  <small>They're hidden behind a “Reveal” button. Untick to leave them out entirely.</small>
+                  <small>
+                    {mode === "guide" ? "Untick to leave them out." : "They're hidden behind a “Reveal” button. Untick to leave them out entirely."}
+                  </small>
                 </span>
               </label>
               <p className="hint">
@@ -116,8 +195,12 @@ export function ShareWorld({ onClose }: { onClose: () => void }) {
           <button className="ghost" onClick={onClose} disabled={!!busy}>
             Cancel
           </button>
-          <button className="primary" disabled={!!busy} onClick={mode === "site" ? exportSite : exportPack}>
-            {mode === "site" ? "Create website…" : "Save world pack…"}
+          <button
+            className="primary"
+            disabled={!!busy}
+            onClick={mode === "file" ? exportFile : mode === "guide" ? exportGuide : mode === "site" ? exportSite : exportPack}
+          >
+            {mode === "file" ? "Save file…" : mode === "guide" ? `Save ${GUIDE[format].name}…` : mode === "site" ? "Create website…" : "Save world pack…"}
           </button>
         </footer>
       </div>

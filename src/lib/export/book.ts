@@ -39,6 +39,8 @@ export interface BookOptions {
   folderHeadings: boolean;
   /** Each document's title becomes its chapter heading. */
   chapterTitles: boolean;
+  /** Markdown only: added to heading levels inside the text (2 below a book's chapter titles). */
+  headingOffset?: number;
 }
 
 interface Section {
@@ -236,7 +238,12 @@ function inlineMd(n: JSONContent, opts: BookOptions, notes?: MdNotes): string {
     const name = mentionName(n);
     return opts.plainLinks ? name : `[[${name}]]`;
   }
-  let t = n.text ?? "";
+  const raw = n.text ?? "";
+  // Spaces stay outside the markers: "* word*" isn't italic in Markdown, " *word*" is.
+  const lead = /^\s*/.exec(raw)![0];
+  const trail = raw.length > lead.length ? /\s*$/.exec(raw)![0] : "";
+  let t = raw.slice(lead.length, raw.length - trail.length);
+  if (!t) return raw;
   for (const m of n.marks ?? []) {
     if (m.type === "bold") t = `**${t}**`;
     if (m.type === "italic") t = `*${t}*`;
@@ -244,7 +251,7 @@ function inlineMd(n: JSONContent, opts: BookOptions, notes?: MdNotes): string {
     if (m.type === "code") t = `\`${t}\``;
     if (m.type === "link" && typeof m.attrs?.href === "string") t = `[${t}](${m.attrs.href})`;
   }
-  return t;
+  return lead + t + trail;
 }
 
 function blockMd(n: JSONContent, opts: BookOptions, prefix = "", notes?: MdNotes): string {
@@ -270,7 +277,7 @@ function blockMd(n: JSONContent, opts: BookOptions, prefix = "", notes?: MdNotes
     case "paragraph":
       return `${prefix}${inner()}\n\n`;
     case "heading":
-      return `${"#".repeat(Math.min(6, (n.attrs?.level ?? 1) + 2))} ${inner()}\n\n`;
+      return `${"#".repeat(Math.min(6, (n.attrs?.level ?? 1) + (opts.headingOffset ?? 2)))} ${inner()}\n\n`;
     case "blockquote":
       return kids("> ");
     case "bulletList":
@@ -292,6 +299,16 @@ function blockMd(n: JSONContent, opts: BookOptions, prefix = "", notes?: MdNotes
     default:
       return "";
   }
+}
+
+/** Plain-reading Markdown for one document (mentions as their names, footnotes at the end). */
+export function docToMarkdown(doc: JSONContent | null | undefined, headingOffset = 0): string {
+  if (!doc) return "";
+  const opts = { plainLinks: true, headingOffset } as BookOptions;
+  const notes: MdNotes = { pending: [], next: 1 };
+  let md = blockMd(doc, opts, "", notes);
+  if (notes.pending.length) md += notes.pending.map((t, i) => `[^${i + 1}]: ${t}`).join("\n") + "\n";
+  return md.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function toMarkdown(sections: Section[], opts: BookOptions): Uint8Array {
@@ -325,7 +342,7 @@ const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> 
 };
 
 /** What Word export gathers along the way: images to embed and the document's footnotes. */
-interface DocxContext {
+export interface DocxContext {
   images: Map<string, LoadedImage>;
   footnotes: Record<number, { children: Paragraph[] }>;
   next: number;
@@ -361,7 +378,7 @@ function runs(nodes: JSONContent[] | undefined, opts: BookOptions, ctx: DocxCont
   });
 }
 
-function docxBlocks(n: JSONContent, opts: BookOptions, ctx: DocxContext, quote = false): (Paragraph | Table)[] {
+export function docxBlocks(n: JSONContent, opts: BookOptions, ctx: DocxContext, quote = false): (Paragraph | Table)[] {
   switch (n.type) {
     case "doc":
     case "blockquote":

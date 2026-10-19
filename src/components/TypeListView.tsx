@@ -5,6 +5,8 @@ import { TypeIcon } from "../lib/icons";
 import { bulkDelete, bulkUpdate, confirmDeleteEntry, createEntry, duplicateEntry } from "../lib/actions";
 import { deleteTemplate, listTemplates, type EntryTemplate } from "../lib/entryTemplates";
 import { askText } from "./Prompt";
+import { shareEntry } from "../lib/shareEntry";
+import { api } from "../lib/api";
 import { assetUrl, relativeTime } from "./EntryView";
 import { openMenu } from "./ContextMenu";
 import { EntryThumb } from "./EntryIcon";
@@ -129,6 +131,11 @@ export function TypeListView({ typeId }: { typeId: string }) {
         onClick: () => useStore.getState().togglePin(entry.id),
       },
       { label: "Duplicate", icon: <Copy size={14} />, onClick: () => duplicateEntry(entry.id) },
+      "separator",
+      { label: "Copy as picture", onClick: async () => shareEntry(await api.getEntry(entry.id), "picture") },
+      { label: "Copy as text", onClick: async () => shareEntry(await api.getEntry(entry.id), "text") },
+      { label: "Save as PDF…", onClick: async () => shareEntry(await api.getEntry(entry.id), "pdf") },
+      { label: "Save as Word document…", onClick: async () => shareEntry(await api.getEntry(entry.id), "docx") },
       "separator",
       { label: "Delete", icon: <Trash2 size={14} />, danger: true, onClick: () => confirmDeleteEntry(entry.id, entry.title) },
     ]);

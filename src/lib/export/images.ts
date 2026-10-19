@@ -1,6 +1,5 @@
-import { readFile } from "@tauri-apps/plugin-fs";
 import type { JSONContent } from "@tiptap/react";
-import { useStore } from "../../store";
+import { api } from "../api";
 
 export interface LoadedImage {
   name: string;
@@ -19,18 +18,19 @@ export function imagesIn(doc: JSONContent | null | undefined, into = new Set<str
   return into;
 }
 
-/** Reads images from the world's assets for an export. Formats Word can't hold are converted to PNG. */
-export async function loadImages(names: Iterable<string>): Promise<Map<string, LoadedImage>> {
-  const base = useStore.getState().world?.assetsPath;
+/**
+ * Reads images from the world's assets for an export. Formats the target can't hold are
+ * converted to PNG (Word takes PNG, JPEG and GIF; PDF only PNG and JPEG).
+ */
+export async function loadImages(names: Iterable<string>, keep: string[] = ["png", "jpg", "jpeg", "gif"]): Promise<Map<string, LoadedImage>> {
   const out = new Map<string, LoadedImage>();
-  if (!base) return out;
   for (const name of names) {
     try {
-      let bytes: Uint8Array = await readFile(`${base}/${name}`);
+      let bytes = new Uint8Array(await api.readAsset(name));
       const ext = name.split(".").pop()?.toLowerCase() ?? "";
       let type: LoadedImage["type"] = ext === "jpg" || ext === "jpeg" ? "jpg" : ext === "gif" ? "gif" : "png";
       const bitmap = await createImageBitmap(new Blob([bytes as BlobPart]));
-      if (!["png", "jpg", "jpeg", "gif"].includes(ext)) {
+      if (!keep.includes(ext)) {
         const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
         canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
         bytes = new Uint8Array(await (await canvas.convertToBlob({ type: "image/png" })).arrayBuffer());

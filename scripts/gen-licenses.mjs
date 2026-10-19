@@ -39,11 +39,23 @@ function checkLicence(name, expr) {
   if (options.every(copyleft)) problems.push(`${name}: copyleft-only licence (${expr})`);
 }
 
+/** Recognises the common permissive licences from their text. */
+function licenceFromText(text = "") {
+  const head = text.slice(0, 400);
+  if (/^\s*(The )?MIT License/i.test(head) || /Permission is hereby granted, free of charge/.test(text)) return "MIT";
+  if (/Apache License\s+Version 2\.0/i.test(head)) return "Apache-2.0";
+  if (/^\s*ISC License/i.test(head) || /Permission to use, copy, modify, and\/or distribute this software for any/.test(text)) return "ISC";
+  if (/Redistribution and use in source and binary forms/.test(text)) return /Neither the name/.test(text) ? "BSD-3-Clause" : "BSD-2-Clause";
+  return undefined;
+}
+
 // ---- JavaScript packages that end up in the app (not dev tools) ----
 const prod = JSON.parse(execSync("npm query .prod", { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 }));
 for (const p of prod) {
   if (!p.location) continue; // the app itself
-  const licence = typeof p.license === "string" ? p.license : p.license?.type;
+  const files = licenceFiles(join(root, p.location));
+  // Some packages ship a licence file but leave it out of package.json; read it from the file.
+  const licence = (typeof p.license === "string" ? p.license : p.license?.type) ?? files.map((id) => licenceFromText(texts[id])).find(Boolean);
   checkLicence(`${p.name} (npm)`, licence);
   const repo = typeof p.repository === "string" ? p.repository : p.repository?.url;
   packages.push({
@@ -52,7 +64,7 @@ for (const p of prod) {
     kind: "npm",
     licence: licence ?? "Unknown",
     source: (repo ?? `https://www.npmjs.com/package/${p.name}`).replace(/^git\+/, "").replace(/\.git$/, ""),
-    texts: licenceFiles(join(root, p.location)),
+    texts: files,
   });
 }
 
