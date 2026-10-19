@@ -366,3 +366,25 @@ MIT License, Copyright (c) Titus Wormer.
 - **Source Sans 3**, Copyright Adobe. SIL Open Font License 1.1.
 
 The SIL Open Font License is available at https://openfontlicense.org.
+
+## llama.cpp (built-in assistant engine)
+
+When the built-in assistant is turned on, Eardloom downloads a pinned release of llama.cpp
+(https://github.com/ggml-org/llama.cpp), verified against its published checksum.
+
+MIT License. Copyright (c) 2023-2026 The ggml authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions: The above copyright notice and this
+permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+## Qwen3 models (built-in assistant)
+
+The assistant's models (Qwen3 4B, 8B and 14B, GGUF) are published by the Qwen team at
+https://huggingface.co/Qwen under the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+They are downloaded only when the user chooses to, and are not modified.
