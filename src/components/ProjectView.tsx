@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  BookOpen, Columns2, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
+  BookOpen, Columns2, FileSearch, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
 import { TypeIcon } from "../lib/icons";
 import { useAutosave } from "../lib/useAutosave";
 import { toParagraphs } from "../lib/text";
-import { MentionClickContext, RichEditor, type EditorStats } from "./RichEditor";
+import { findInOpenEditor, findWhenOpened, MentionClickContext, RichEditor, type EditorStats } from "./RichEditor";
 import { openMenu } from "./ContextMenu";
 import { ExportBook } from "./ExportBook";
 import { SnapshotPanel } from "./Snapshots";
@@ -17,6 +17,7 @@ import { CardsView, OutlineView, PlanSettingsPanel } from "./Planning";
 import { CommentsPanel } from "./Comments";
 import { SplitPane, type SplitTarget } from "./SplitPane";
 import { FolderFlow } from "./FolderFlow";
+import { BookFind } from "./BookFind";
 import { snapshotBeforeFirstEdit } from "../lib/editor/autoSnapshot";
 import { useActiveEditor } from "../lib/editor/comment";
 import { planOf } from "../lib/plan";
@@ -90,7 +91,13 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loreId, setLoreId] = useState<string | null>(null);
-  const [loreOpen, setLoreOpen] = useState(true);
+  // The panel beside the manuscript: lore, snapshots, comments or find in book.
+  const [side, setSide] = useState<"lore" | "snaps" | "comments" | "find" | null>("lore");
+  const toggleSide = (s: NonNullable<typeof side>) => setSide((cur) => (cur === s ? null : s));
+  const loreOpen = side === "lore";
+  const snapsOpen = side === "snaps";
+  const commentsOpen = side === "comments";
+  const findOpen = side === "find";
   const modeKey = `eardloom.mode.${id}`;
   const [mode, setModeState] = useState<"write" | "cards" | "outline">(() => {
     try {
@@ -115,8 +122,6 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [editorRev, setEditorRev] = useState(0);
   const [exporting, setExporting] = useState(false);
-  const [snapsOpen, setSnapsOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentVersion, setCommentVersion] = useState(0);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const focusedComment = useActiveEditor((s) => s.focusedComment);
@@ -167,7 +172,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
     reloadCounts();
   }, [reloadCounts, commentVersion]);
   useEffect(() => {
-    if (focusedComment) (setCommentsOpen(true), setLoreOpen(false), setSnapsOpen(false));
+    if (focusedComment) setSide("comments");
   }, [focusedComment]);
   useEffect(() => {
     reload();
@@ -210,9 +215,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       const commentId = newId();
       editor.chain().focus().setMark("comment", { id: commentId }).run();
       await api.saveComment({ id: commentId, docId, body: "", resolved: false });
-      setCommentsOpen(true);
-      setLoreOpen(false);
-      setSnapsOpen(false);
+      setSide("comments");
       setCommentVersion((v) => v + 1);
       useActiveEditor.setState({ focusedComment: commentId });
     };
@@ -227,6 +230,10 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "m") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("eardloom:comment"));
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSide("find");
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
@@ -272,15 +279,13 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const showSplit = split.open && mode === "write" && !focusMode;
   const toggleSplit = () => {
     // Side by side needs the room, so the lore panel steps aside.
-    if (!split.open) (setLoreOpen(false), setSnapsOpen(false), setCommentsOpen(false));
+    if (!split.open) setSide(null);
     setSplit({ open: !split.open });
   };
   const openMention = (entryId: string) => {
     if (showSplit) return setSplit({ target: { kind: "entry", id: entryId } });
     setLoreId(entryId);
-    setLoreOpen(true);
-    setSnapsOpen(false);
-    setCommentsOpen(false);
+    setSide("lore");
   };
 
   const add = async (kind: "text" | "folder", near?: DocSummary, inParent?: string | null) => {
@@ -426,7 +431,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   };
 
   return (
-    <div className={`project ${(loreOpen || snapsOpen || commentsOpen) && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
+    <div className={`project ${side && !focusMode ? "with-lore" : ""} ${focusMode ? "focus" : ""}`}>
       <aside className="binder">
         <ProjectTitle project={project} onSaved={refreshProjects} />
         <div className="binder-actions">
@@ -488,7 +493,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             {!focusMode && (
               <button
                 className={`icon-btn ${commentsOpen ? "on" : ""}`}
-                onClick={() => (setCommentsOpen(!commentsOpen), setLoreOpen(false), setSnapsOpen(false))}
+                onClick={() => toggleSide("comments")}
                 title="Comments"
               >
                 <MessageSquare size={15} />
@@ -496,9 +501,14 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               </button>
             )}
             {!focusMode && (
+              <button className={`icon-btn ${findOpen ? "on" : ""}`} onClick={() => toggleSide("find")} title="Find in book (Ctrl+Shift+F)">
+                <FileSearch size={15} />
+              </button>
+            )}
+            {!focusMode && (
               <button
                 className={`icon-btn ${snapsOpen ? "on" : ""}`}
-                onClick={() => (setSnapsOpen(!snapsOpen), setLoreOpen(false), setCommentsOpen(false))}
+                onClick={() => toggleSide("snaps")}
                 title="Snapshots (Ctrl+S to take one)"
               >
                 <History size={15} />
@@ -510,7 +520,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               </button>
             )}
             {!focusMode && (
-              <button className="icon-btn" onClick={() => (setLoreOpen(!loreOpen), setSnapsOpen(false), setCommentsOpen(false))} title="Toggle lore panel">
+              <button className="icon-btn" onClick={() => toggleSide("lore")} title="Toggle lore panel">
                 {loreOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
               </button>
             )}
@@ -582,6 +592,18 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <p className="hint">Click into a chapter to see its comments.</p>
           </aside>
         ))}
+      {findOpen && !focusMode && (
+        <BookFind
+          docs={docs}
+          flush={() => flushDoc.current()}
+          onOpen={(target, term) => {
+            setMode("write");
+            if (target === activeId) findInOpenEditor(term);
+            else (findWhenOpened(term), open(target));
+          }}
+          onChanged={() => (reload(), setSnapVersion((v) => v + 1))}
+        />
+      )}
       {planSettings && <PlanSettingsPanel project={project} onClose={() => setPlanSettings(false)} />}
       {snapsOpen && !focusMode && !panelDocId && (
         <aside className="lore">

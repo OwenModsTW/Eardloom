@@ -38,6 +38,17 @@ import { getManuscriptLook } from "../lib/prefs";
 import type { EntrySummary } from "../lib/types";
 
 /** Lets the surrounding view decide what clicking a mention does (navigate, open in side panel...). */
+// Find in book shows its search in the chapter a result leads to.
+let pendingFind: string | null = null;
+/** Opens the find bar on `term` in the main manuscript editor that's open now. */
+export function findInOpenEditor(term: string) {
+  window.dispatchEvent(new CustomEvent("eardloom:find", { detail: term }));
+}
+/** Opens the find bar on `term` in the next main manuscript editor to open. */
+export function findWhenOpened(term: string) {
+  pendingFind = term;
+}
+
 export const MentionClickContext = createContext<(id: string) => void>(() => {});
 
 function MentionChip({ node }: NodeViewProps) {
@@ -260,6 +271,14 @@ export function RichEditor({
   const onStatsRef = useRef(onStats);
   onStatsRef.current = onStats;
   const [find, setFind] = useState<{ term: string; replace: boolean } | null>(null);
+  // Find in book opens its search in the chapter it leads to.
+  useEffect(() => {
+    if (!primary) return;
+    if (pendingFind) (setFind({ term: pendingFind, replace: false }), (pendingFind = null));
+    const on = (e: Event) => setFind({ term: (e as CustomEvent<string>).detail, replace: false });
+    window.addEventListener("eardloom:find", on);
+    return () => window.removeEventListener("eardloom:find", on);
+  }, [primary]);
 
   const report = (editor: Editor) => {
     if (!onStatsRef.current) return;
@@ -394,7 +413,7 @@ export function RichEditor({
   return (
     <div className="rich-frame" onKeyDown={onKeyDown}>
       {toolbar && <FormatBar editor={editor} manuscript={manuscript} onFind={() => setFind({ term: "", replace: false })} />}
-      {find && <FindBar editor={editor} initial={find.term} withReplace={find.replace} onClose={() => setFind(null)} />}
+      {find && <FindBar key={find.term} editor={editor} initial={find.term} withReplace={find.replace} onClose={() => setFind(null)} />}
       {body}
     </div>
   );

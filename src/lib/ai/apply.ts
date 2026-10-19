@@ -115,30 +115,30 @@ async function saveEntry(entry: Entry) {
   useStore.getState().patchEntry({ ...entry, updatedAt: new Date().toISOString() });
 }
 
+/** Everything a chapter can contain, for editing chapters that aren't open on screen. */
+export const CHAPTER_EXTENSIONS = [
+  StarterKit,
+  Mention,
+  TextAlign.configure({ types: ["heading", "paragraph"] }),
+  Highlight.configure({ multicolor: true }),
+  TextStyle,
+  Color,
+  Subscript,
+  Superscript,
+  CommentMark,
+  ...RICH_BLOCKS,
+];
+
 /** A short-lived editor for changing a chapter that isn't open on screen. */
 function headless(content: JSONContent | null) {
-  return new Editor({
-    extensions: [
-      StarterKit,
-      Mention,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Highlight.configure({ multicolor: true }),
-      TextStyle,
-      Color,
-      Subscript,
-      Superscript,
-      CommentMark,
-      ...RICH_BLOCKS,
-    ],
-    content: content ?? undefined,
-  });
+  return new Editor({ extensions: CHAPTER_EXTENSIONS, content: content ?? undefined });
 }
 
 /**
  * Runs `change` against the chapter: in the live editor if it's open (so nothing the
  * author is typing gets overwritten), otherwise on a stored copy that's then saved.
  */
-async function withChapter(docId: string, change: (editor: Editor) => string | null): Promise<string> {
+export async function withChapter(docId: string, change: (editor: Editor) => string | null): Promise<string> {
   const active = useActiveEditor.getState();
   if (active.editor && active.docId === docId) {
     return change(active.editor) ?? "Couldn't find that exact passage in the chapter.";
