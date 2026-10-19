@@ -1,3 +1,4 @@
+mod ai;
 mod backup;
 mod codex;
 mod db;
@@ -20,6 +21,7 @@ pub fn run() {
 
     builder
         .manage(world::AppState::default())
+        .manage(ai::AiState::default())
         .invoke_handler(tauri::generate_handler![
             world::list_recent_worlds,
             world::forget_recent_world,
@@ -47,6 +49,12 @@ pub fn run() {
             maps::get_map,
             maps::save_map,
             maps::delete_map,
+            ai::assistant_info,
+            ai::assistant_set_private,
+            ai::assistant_start,
+            ai::assistant_send,
+            ai::assistant_stop,
+            ai::assistant_resolve,
             writing::list_projects,
             writing::save_project,
             writing::delete_project,
