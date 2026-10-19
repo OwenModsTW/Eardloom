@@ -2,6 +2,24 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.9
+
+Entry history, side-by-side writing, family trees, images, tables and footnotes, and much more.
+
+- **Lore with your assistant**: the assistant can now write and rewrite full articles for your entries, with headings and lists, and every change can be undone. Your books stay yours: it gives feedback on your story but won't write it.
+- **Entry history**: entries keep earlier versions, automatically before your first edit each session and before any assistant or bulk change, and whenever you save one. Compare any version with now and restore it. Open History on any entry.
+- **Side by side**: open an entry, another chapter or a map beside the chapter you're writing. Drag to resize; it's remembered for each book.
+- **Read as one**: click a folder, or the book button, to read and edit all its chapters as one continuous document.
+- **Relationships**: give link fields a name for the other direction (a planet's "Homeworld" shows as "Native peoples" on the planet), see them under Connections on each entry, and hover the graph to see what each connection is.
+- **Family trees**: mark link fields as Parents, Children, Partners or Siblings to see a family tree for any character.
+- **Templates and bulk changes**: save an entry as a template and start new ones from it. Tick entries in a category's table to tag, move, change visibility or delete them together.
+- **Images, tables and footnotes** in chapters and articles, included when you export to EPUB, Word or a website.
+- **Page view** shows your chapter as paper with page breaks marked, and the footer counts manuscript pages.
+- **Find in book** (Ctrl+Shift+F) searches every chapter, and can replace across them all, taking a snapshot first.
+- **Fixes**: the assistant's changes to the entry you have open now show straight away instead of being overwritten, replies display headings and lists properly, and long list values no longer overlap.
+
+This update upgrades your worlds' storage. After updating, older versions of Eardloom can't open them.
+
 ## 0.1.8
 
 The assistant remembers what you talked about in each entry and chapter.
