@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { gb, localAi, recommend, useLocalAi, type LocalAiStatus } from "../lib/localAi";
+import { gb, localAi, recommend, useLocalAi, type AiDevice, type LocalAiStatus } from "../lib/localAi";
 import { useStore } from "../store";
 
 interface Progress {
@@ -14,7 +14,7 @@ export function LocalAiSettings() {
   const { enabled, model, thinking, setPrefs } = useLocalAi();
   const notify = useStore((s) => s.notify);
   const [status, setStatus] = useState<LocalAiStatus | null>(null);
-  const [devices, setDevices] = useState<[string, number][] | null>(null);
+  const [devices, setDevices] = useState<AiDevice[] | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +38,8 @@ export function LocalAiSettings() {
     };
   }, []);
 
-  const vram = Math.max(0, ...(devices ?? []).map((d) => d[1]));
+  // The engine runs on the first device (a dedicated card when there is one).
+  const vram = devices?.[0]?.memoryMb ?? 0;
   const suggested = status && devices ? recommend(status.models, vram) : "standard";
   const current = status?.models.find((m) => m.id === model);
 
@@ -73,7 +74,8 @@ export function LocalAiSettings() {
         <div className="local-ai">
           {devices && devices.length > 0 && (
             <p className="hint">
-              Graphics: {devices.map(([n, mb]) => `${n} (${(mb / 1024).toFixed(0)} GB)`).join(", ")}
+              Runs on: {devices[0].name} ({(devices[0].memoryMb / 1024).toFixed(0)} GB
+              {devices[0].dedicated ? "" : ", shared with the computer's memory"})
             </p>
           )}
           {devices && devices.length === 0 && status.engineInstalled && (

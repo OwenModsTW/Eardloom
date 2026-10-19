@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { ArrowLeft, ArrowRight, BookOpen, Hourglass, LayoutGrid, LogOut, Map as MapIcon, Plus, Search, Sparkles, Waypoints } from "lucide-react";
@@ -187,6 +188,7 @@ export function Shell() {
       </nav>
 
       <main className="content">
+        <ErrorBoundary resetKey={JSON.stringify(route)} onHome={() => go({ view: "dashboard" })}>
         {route.view === "dashboard" && <Dashboard />}
         {route.view === "type" && <TypeListView key={route.typeId} typeId={route.typeId} />}
         {route.view === "entry" && <EntryView id={route.id} />}
@@ -198,6 +200,7 @@ export function Shell() {
         {route.view === "maps" && <MapsPage />}
         {route.view === "map" && <MapEditor key={route.id} id={route.id} focusPin={route.pin} />}
         {route.view === "graph" && <GraphView key={route.focus ?? ""} focus={route.focus} />}
+        </ErrorBoundary>
       </main>
 
       {assistantOn && assistantOpen && !focusMode && <AssistantPanel />}

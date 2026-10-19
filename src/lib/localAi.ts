@@ -64,9 +64,18 @@ export const useLocalAi = create<LocalAiState>((set, get) => ({
   setPanel: (panelOpen) => set({ panelOpen }),
 }));
 
+export interface AiDevice {
+  id: string;
+  name: string;
+  memoryMb: number;
+  /** A separate graphics card, rather than graphics built into the processor. */
+  dedicated: boolean;
+}
+
 export const localAi = {
   status: () => invoke<LocalAiStatus>("local_ai_status"),
-  hardware: () => invoke<[string, number][]>("local_ai_hardware"),
+  /** Graphics devices, the one the assistant will use first. */
+  hardware: () => invoke<AiDevice[]>("local_ai_hardware"),
   install: (model: string) => invoke<void>("local_ai_install", { model }),
   cancelDownload: () => invoke<void>("local_ai_cancel_download"),
   remove: (model: string | null, everything: boolean) => invoke<void>("local_ai_remove", { model, everything }),

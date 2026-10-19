@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useEffect } from "react";
 import { useStore } from "./store";
 import { startUpdateChecks } from "./lib/updater";
@@ -46,7 +47,9 @@ export default function App() {
   return (
     <div className="app">
       <UpdateBanner />
-      {world ? <Shell /> : <Home />}
+      <ErrorBoundary resetKey={world?.path ?? ""} onHome={() => window.location.reload()}>
+        {world ? <Shell /> : <Home />}
+      </ErrorBoundary>
       {toast && <div className="toast">{toast}</div>}
       <UpdatePrompt />
       <WhatsNew />
