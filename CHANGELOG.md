@@ -2,6 +2,16 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.13
+
+Print your book, and keep track of your writing.
+
+- **Print-ready PDF** in Export: a paperback interior ready for print-on-demand (5 × 8 up to 6 × 9 and A5, a book typeface, justified text, chapter openings, running heads and page numbers, with margins sized for the binding), or a standard manuscript for agents and editors (Courier, double spaced, a title page with the word count, and your surname, title and page number on every page).
+- **Writing goals** on the home page: words written today, a daily goal, your streak and the last 30 days at a glance.
+- **Finish dates**: give a book a word target and a date, and see how many words a day it takes to get there.
+
+This update upgrades your worlds' storage. After updating, older versions of Eardloom can't open them.
+
 ## 0.1.12
 
 Your story and your world, connected: scenes, plot threads and continuity checks.
