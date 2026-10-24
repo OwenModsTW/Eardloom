@@ -2,6 +2,15 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.11
+
+A thesaurus: right-click any word for alternatives.
+
+- **Right-click a word** in a chapter or entry for the best alternatives, already in the right form ("running" offers "sprinting", "swords" offers "blades"), keeping capitals and formatting.
+- **Thesaurus** (Shift+F7) shows every meaning of a word with its synonyms, similar words and opposites. Click a word to use it, or Ctrl+click to look that one up.
+- **Cut, copy and paste** are in the right-click menu too.
+- Works offline, built on WordNet from Princeton University.
+
 ## 0.1.10
 
 Easy sharing, and names that read the way you write them.
