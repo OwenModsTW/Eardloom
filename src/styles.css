@@ -148,7 +148,7 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .chip button { color: var(--muted); display: grid; place-items: center; width: 16px; height: 16px; border-radius: 2px; }
 .chip button:hover { color: var(--text); background: var(--bg-hover); }
 .chip.link { background: color-mix(in srgb, var(--chip, var(--muted)) 14%, transparent); }
-.chip .chip-label { width: auto; height: auto; color: color-mix(in srgb, var(--chip, var(--text)) 75%, var(--text)); font-size: 13.5px; }
+.chip .chip-label { display: inline-flex; align-items: center; gap: 4px; width: auto; height: auto; color: color-mix(in srgb, var(--chip, var(--text)) 75%, var(--text)); font-size: 13.5px; }
 .chip .chip-label:hover { background: none; text-decoration: underline; }
 .tag { display: inline-block; font-size: 12px; color: var(--text-soft); background: var(--bg-active); border-radius: 3px; padding: 0 6px; margin: 1px 3px 1px 0; }
 
@@ -354,7 +354,8 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .recent { list-style: none; padding: 0; margin: 0; }
 .recent li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .recent li .link { overflow: hidden; white-space: nowrap; }
-.recent small { color: var(--muted); font-size: 12.5px; white-space: nowrap; text-transform: capitalize; }
+.recent small { color: var(--muted); font-size: 12.5px; white-space: nowrap; display: inline-block; }
+.recent small::first-letter { text-transform: uppercase; }
 
 /* ---------- entry ---------- */
 .entry { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; max-width: 1180px; margin: 0 auto; padding: 18px 36px 80px; }
@@ -846,7 +847,8 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .compare-body p { margin: 0 0 0.8em; }
 .cmp-same { color: var(--muted); }
 .cmp-add, .compare-body ins, .dialog-foot ins { background: color-mix(in srgb, var(--teal) 28%, transparent); text-decoration: none; border-radius: 2px; }
-.cmp-del, .compare-body del, .dialog-foot del { background: color-mix(in srgb, var(--danger) 22%, transparent); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--danger) 70%, transparent); border-radius: 2px; }
+.cmp-del, .compare-body del, .dialog-foot del { background: color-mix(in srgb, var(--danger) 22%, transparent); text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: var(--danger); border-radius: 2px; }
+.compare-body del + ins, .compare-body ins + del { margin-left: 3px; }
 .inline-check { padding: 0; align-items: center; }
 .inline-check input { margin: 0; }
 

@@ -20,8 +20,13 @@ document.addEventListener("contextmenu", (e) => {
   if (!el.closest("input, textarea, [contenteditable='true']")) e.preventDefault();
 });
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const start = () =>
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+
+// The automatic page tests run the app against a stand-in backend (never in a real build).
+if (import.meta.env.MODE === "smoke") import("./smoke/mock").then(start);
+else start();

@@ -20,6 +20,15 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm ci
       - run: npx tsc --noEmit
+      # Every page of the app, opened in Edge against a sample world (tests/smoke.spec.ts).
+      - name: Page tests
+        run: npm run test:smoke
+      - name: Page test screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-test-screenshots
+          path: test-results
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       # The app's copy of the backend's types must match the Rust code (cargo test regenerates them).
       - name: Generated types are up to date

@@ -28,13 +28,53 @@ type Raw = {
   u: Record<string, string>;
 };
 let data: Promise<Raw> | null = null;
+let loaded: Raw | null = null;
 
 /** Loads the thesaurus (once). */
 export function loadThesaurus() {
-  return (data ??= fetch("/thesaurus.json").then((r) => {
+  return (data ??= fetch("/thesaurus.json").then(async (r) => {
     if (!r.ok) throw new Error("The thesaurus couldn't be loaded.");
-    return r.json() as Promise<Raw>;
+    return (loaded = (await r.json()) as Raw);
   }));
+}
+
+/** How commonly a single word is used in everyday English (0 for phrases and rare words). */
+export function commonness(word: string): number {
+  const w = word.toLowerCase();
+  if (!loaded || w.includes(" ") || !Object.prototype.hasOwnProperty.call(loaded.u, w)) return 0;
+  return loaded.u[w].split(",").reduce((n, c) => n + Number(c), 0);
+}
+
+/** Everyday words first; phrases after single words. */
+export const byCommonness = (a: string, b: string) => commonness(b) - commonness(a) || a.split(" ").length - b.split(" ").length;
+
+/** Broader terms too general to offer as an alternative ("run" is a kind of "be"). */
+const TOO_GENERAL = new Set(["be", "have", "do", "act", "move", "change", "make", "get", "entity", "object", "abstraction", "physical entity", "thing", "matter", "relation", "attribute", "state", "event", "group", "person", "individual", "someone", "somebody"]);
+
+/**
+ * The best few alternatives across a word's meanings, for a quick menu: the most common word
+ * from each meaning in turn, broader words where a meaning has no synonyms, each already in the
+ * same form and capitalisation as the word it replaces.
+ */
+export function topAlternatives(word: string, senses: Sense[], max = 7) {
+  const seen = new Set<string>([word.toLowerCase(), ...senses.map((s) => s.base)]);
+  const pools = senses.map((s) => {
+    const words = s.synonyms.length ? [...s.synonyms, ...(s.pos === "a" ? s.related : [])] : s.related.filter((w) => !TOO_GENERAL.has(w));
+    return [...words].sort(byCommonness).map((w) => ({ text: fitReplacement(word, w, s.form, s.pos), gloss: s.gloss }));
+  });
+  const out: { text: string; gloss: string }[] = [];
+  const take = (pool: (typeof pools)[number]) => {
+    for (let next = pool.shift(); next; next = pool.shift()) {
+      if (seen.has(next.text.toLowerCase())) continue;
+      seen.add(next.text.toLowerCase());
+      out.push(next);
+      return;
+    }
+  };
+  // The most common meaning is usually the one meant, so it offers two to start with.
+  if (pools[0]) take(pools[0]);
+  while (out.length < max && pools.some((p) => p.length)) for (const pool of pools) if (out.length < max) take(pool);
+  return out;
 }
 
 // ---- irregular forms

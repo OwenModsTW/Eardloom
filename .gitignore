@@ -33,3 +33,7 @@ src-tauri/gen/schemas
 
 # Built from WordNet during the build
 public/thesaurus.json
+
+# Page test output
+test-results
+playwright-report

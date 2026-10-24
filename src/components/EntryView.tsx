@@ -286,7 +286,7 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
             </button>
           )}
           <Infobox type={type} entry={entry} setField={setField} />
-          <ReverseLinks entryId={entry.id} />
+          <ReverseLinks entryId={entry.id} own={entry} />
           <div className="infobox-foot">
             <span>Visibility</span>
             <Select
@@ -309,7 +309,7 @@ function EntryEditor({ initial, onOpenEntry }: { initial: Entry; onOpenEntry?: (
  * This entry as other entries' link fields see it, named from this side ("Members", "Children"),
  * for fields that have a name for the reverse direction.
  */
-function ReverseLinks({ entryId }: { entryId: string }) {
+function ReverseLinks({ entryId, own }: { entryId: string; own: Entry }) {
   const { types, entries } = useStore();
   const [links, setLinks] = useState<Backlink[]>([]);
   const rev = useEntryRevision((s) => s.revs[entryId] ?? 0);
@@ -321,20 +321,28 @@ function ReverseLinks({ entryId }: { entryId: string }) {
 
   const groups = useMemo(() => {
     const fields = fieldsById(types);
+    // What this entry already lists under each field name ("Partners: Ilse"), so a two-way
+    // relationship isn't shown twice.
+    const listed = new Map<string, Set<string>>();
+    for (const f of types.find((t) => t.id === own.typeId)?.fields ?? []) {
+      const v = own.fields[f.id];
+      const ids = Array.isArray(v) ? v.map(String) : typeof v === "string" ? [v] : [];
+      listed.set(f.label.trim().toLowerCase(), new Set(ids));
+    }
     const out = new Map<string, Backlink[]>();
     for (const l of links) {
       const name = l.sourceKind === "entry" ? fields.get(l.via)?.inverse?.trim() : undefined;
-      if (!name) continue;
+      if (!name || listed.get(name.toLowerCase())?.has(l.sourceId)) continue;
       if (!out.has(name)) out.set(name, []);
       if (!out.get(name)!.some((x) => x.sourceId === l.sourceId)) out.get(name)!.push(l);
     }
     return [...out];
-  }, [links, types]);
+  }, [links, types, own]);
 
   if (!groups.length) return null;
   return (
     <section className="infobox-section reverse-links">
-      <h4>Connections</h4>
+      <h4>Relationships</h4>
       {groups.map(([name, ls]) => (
         <div key={name} className="infobox-row">
           <span className="infobox-label">{name}</span>

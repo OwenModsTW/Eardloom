@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Search, X } from "lucide-react";
-import { fitReplacement, lookup, POS_LABEL, type Sense } from "../lib/thesaurus";
+import { byCommonness, fitReplacement, lookup, POS_LABEL, type Sense } from "../lib/thesaurus";
 
 /**
  * Every meaning of a word with its alternatives. Click a word to use it in the text (in the
@@ -98,11 +98,11 @@ export function ThesaurusPanel({
               <p className="thes-meaning">
                 <em>{POS_LABEL[s.pos]}</em> {s.gloss}
               </p>
-              {s.synonyms.length > 0 && <div className="thes-words">{s.synonyms.map((w) => chip(w, s))}</div>}
+              {s.synonyms.length > 0 && <div className="thes-words">{[...s.synonyms].sort(byCommonness).map((w) => chip(w, s))}</div>}
               {s.related.length > 0 && (
                 <div className="thes-words related">
                   <span>{s.pos === "a" ? "Similar" : "Broader"}</span>
-                  {s.related.map((w) => chip(w, s))}
+                  {[...s.related].sort(byCommonness).map((w) => chip(w, s))}
                 </div>
               )}
               {s.opposites.length > 0 && (
@@ -119,18 +119,4 @@ export function ThesaurusPanel({
   );
 }
 
-/** The first few alternatives across a word's meanings, for the right-click menu. */
-export function topAlternatives(word: string, senses: Sense[], max = 7) {
-  const out: { text: string; gloss: string }[] = [];
-  const seen = new Set<string>([word.toLowerCase()]);
-  for (const s of senses) {
-    for (const w of [...s.synonyms, ...(s.pos === "a" ? s.related : [])]) {
-      const text = fitReplacement(word, w, s.form, s.pos);
-      if (seen.has(text.toLowerCase())) continue;
-      seen.add(text.toLowerCase());
-      out.push({ text, gloss: s.gloss });
-      if (out.length >= max) return out;
-    }
-  }
-  return out;
-}
+export { topAlternatives } from "../lib/thesaurus";
