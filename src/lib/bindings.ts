@@ -24,4 +24,5 @@ export type { SnapshotSummary } from "../generated/bindings/SnapshotSummary";
 export type { TimelineItem } from "../generated/bindings/TimelineItem";
 export type { WorldInfo } from "../generated/bindings/WorldInfo";
 export type { WorldMap } from "../generated/bindings/WorldMap";
+export type { WritingDay } from "../generated/bindings/WritingDay";
 export type { WritingOverview } from "../generated/bindings/WritingOverview";

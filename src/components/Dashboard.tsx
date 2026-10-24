@@ -10,6 +10,7 @@ import { formatDate, sortKey } from "../lib/calendar";
 import { relativeTime } from "./EntryView";
 import { assetUrl, EntryGlyph, EntryThumb } from "./EntryIcon";
 import { ShareWorld } from "./ShareWorld";
+import { TodayPanel } from "./WritingGoals";
 import { openMenu } from "./ContextMenu";
 import type { TimelineItem } from "../lib/types";
 
@@ -175,6 +176,8 @@ export function Dashboard() {
         </div>
 
         <aside className="dash-side">
+          {writing && projects.length > 0 && <TodayPanel overview={writing} projects={projects} />}
+
           <section className="panel">
             <h2>Pinned</h2>
             {pinnedEntries.length ? (

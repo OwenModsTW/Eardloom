@@ -614,7 +614,7 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .share-preview img { max-width: 100%; max-height: 62vh; border-radius: var(--r); box-shadow: 0 6px 24px #0006; }
 .share-options { padding: 14px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .share-options .field-label { margin-top: 10px; }
-.share-options .segmented { align-self: flex-start; }
+.share-options .segmented, .field .segmented { align-self: flex-start; }
 .share-warning { margin: 12px 0 0; padding: 8px 10px; border-radius: var(--r); font-size: 13px; color: var(--accent); background: var(--accent-soft); }
 .dialog.update-dialog { width: min(560px, 94vw); }
 .update-dialog .dialog-head { display: flex; flex-direction: column; gap: 2px; padding-top: 18px; }
@@ -818,6 +818,25 @@ input.inline:focus { background: var(--bg-input); border-color: var(--accent); }
 .target.done .target-bar span { background: var(--accent); }
 .doc-footer .target { width: 200px; }
 .target-input { height: 22px; width: 90px; font-size: 12px; padding: 0 6px; }
+.target-input.date { width: 140px; }
+.deadline { display: block; text-align: left; font-size: 12px; color: var(--muted); margin-top: 6px; padding: 0; background: none; border: 0; cursor: pointer; }
+.deadline:hover { color: var(--text); }
+.deadline.late { color: var(--danger); }
+.binder-foot .link.quiet { display: block; margin-top: 4px; }
+
+/* Dashboard writing panel */
+.writing-today .today-count { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 8px; }
+.writing-today .today-count strong { font: 600 28px var(--ui); font-variant-numeric: tabular-nums; color: var(--text); }
+.writing-today .today-count span { color: var(--muted); font-size: 13px; }
+.writing-today .streak { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 600; }
+.today-bars { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 52px; margin-top: 12px; }
+.today-bars span { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--line-strong); }
+.today-bars span.met { background: var(--teal); }
+.today-bars span.today { outline: 1px solid var(--muted); outline-offset: 1px; }
+.today-bars .goal-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--faint); pointer-events: none; }
+.today-legend { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
+.deadlines { margin-top: 10px; }
+.deadlines li { flex-direction: column; align-items: flex-start; }
 
 /* ---------- focus mode ---------- */
 .shell.focus-mode .sidebar { display: none; }

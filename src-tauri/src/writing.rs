@@ -3,7 +3,7 @@
 use crate::codex::{replace_links, replace_search};
 use crate::db;
 use crate::world::{err, AppState, CmdResult};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
@@ -206,6 +206,11 @@ pub fn save_doc(state: State<AppState>, doc: Doc) -> CmdResult<i64> {
         let extracted = doc.body.as_ref().map(db::extract).unwrap_or_default();
         let words = db::word_count(&extracted.text);
         let tx = w.conn.unchecked_transaction().map_err(err)?;
+        let before: i64 = tx
+            .query_row("SELECT word_count FROM docs WHERE id = ?1", [&doc.id], |r| r.get(0))
+            .optional()
+            .map_err(err)?
+            .unwrap_or(0);
         tx.execute(
             "INSERT INTO docs (id, project_id, parent_id, kind, title, synopsis, status, body, word_count, sort, label)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
@@ -233,9 +238,23 @@ pub fn save_doc(state: State<AppState>, doc: Doc) -> CmdResult<i64> {
             extracted.mentions.into_iter().map(|m| (m, "mention".to_string())).collect();
         replace_links(&tx, "doc", &doc.id, &links)?;
         replace_search(&tx, "doc", &doc.id, &doc.title, &format!("{}\n{}", doc.synopsis, extracted.text))?;
+        if doc.kind == "text" && words != before {
+            log_words(&tx, &doc.project_id, words - before)?;
+        }
         tx.commit().map_err(err)?;
         Ok(words)
     })
+}
+
+/// Adds to today's tally for a book (net words: cutting text counts against the day).
+fn log_words(conn: &rusqlite::Connection, project_id: &str, delta: i64) -> CmdResult<()> {
+    conn.execute(
+        "INSERT INTO writing_log (day, project_id, words) VALUES (date('now', 'localtime'), ?1, ?2)
+         ON CONFLICT(day, project_id) DO UPDATE SET words = words + excluded.words",
+        params![project_id, delta],
+    )
+    .map_err(err)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -304,6 +323,18 @@ pub struct ProjectTotals {
 pub struct WritingOverview {
     pub recent: Vec<RecentDoc>,
     pub totals: Vec<ProjectTotals>,
+    /// Words written each day over the last year and a bit, oldest first.
+    pub days: Vec<WritingDay>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct WritingDay {
+    /// Local date, YYYY-MM-DD.
+    pub day: String,
+    pub project_id: String,
+    pub words: i64,
 }
 
 /// What was written last, and how big each project is, for the dashboard.
@@ -333,7 +364,19 @@ pub fn writing_overview(state: State<AppState>) -> CmdResult<WritingOverview> {
             .map_err(err)?
             .collect::<Result<_, _>>()
             .map_err(err)?;
-        Ok(WritingOverview { recent, totals })
+        let mut stmt = w
+            .conn
+            .prepare(
+                "SELECT day, project_id, words FROM writing_log
+                  WHERE day >= date('now', 'localtime', '-400 days') ORDER BY day",
+            )
+            .map_err(err)?;
+        let days = stmt
+            .query_map([], |r| Ok(WritingDay { day: r.get(0)?, project_id: r.get(1)?, words: r.get(2)? }))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        Ok(WritingOverview { recent, totals, days })
     })
 }
 
@@ -507,6 +550,21 @@ mod tests {
 
     use crate::db;
     use rusqlite::params;
+
+    #[test]
+    fn writing_log_tallies_net_words_per_day_and_book() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_for_tests(&conn);
+        conn.execute_batch("INSERT INTO projects (id, title) VALUES ('p', 'Book');").unwrap();
+        super::log_words(&conn, "p", 500).unwrap();
+        super::log_words(&conn, "p", -120).unwrap();
+        let (n, words): (i64, i64) =
+            conn.query_row("SELECT COUNT(*), SUM(words) FROM writing_log", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((n, words), (1, 380));
+        conn.execute("DELETE FROM projects", []).unwrap();
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM writing_log", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0, "deleted with its book");
+    }
 
     #[test]
     fn snapshots_follow_their_document_and_prune_automatic_ones() {

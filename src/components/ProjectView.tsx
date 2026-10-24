@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BookDeadline, TargetMeter } from "./WritingGoals";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
@@ -51,41 +52,6 @@ const sessionStarts = new Map<string, number>();
 
 
 /** Click to set a word target; shows progress once one is set. */
-function TargetMeter({ words, target, onChange, label }: { words: number; target?: number; onChange: (n: number | undefined) => void; label: string }) {
-  const [editing, setEditing] = useState(false);
-  if (editing)
-    return (
-      <input
-        className="target-input"
-        autoFocus
-        inputMode="numeric"
-        defaultValue={target ?? ""}
-        placeholder="Words"
-        onBlur={(e) => {
-          const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
-          onChange(Number.isFinite(n) && n > 0 ? n : undefined);
-          setEditing(false);
-        }}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur()}
-      />
-    );
-  if (!target)
-    return (
-      <button className="link quiet" onClick={() => setEditing(true)}>
-        Set {label} target
-      </button>
-    );
-  const pct = Math.min(100, Math.round((words / target) * 100));
-  return (
-    <button className={`target ${pct >= 100 ? "done" : ""}`} onClick={() => setEditing(true)} title={`${label} target: click to change`}>
-      <span className="target-bar">
-        <span style={{ width: `${pct}%` }} />
-      </span>
-      {pct}% of {target.toLocaleString()}
-    </button>
-  );
-}
-
 export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const project = useStore((s) => s.projects.find((p) => p.id === id));
   const { go, refreshProjects, focusMode, setFocusMode } = useStore();
@@ -254,7 +220,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
 
   if (!project) return <p className="page-note">This project no longer exists.</p>;
 
-  const settings = project.settings as { targets?: Record<string, number>; bookTarget?: number };
+  const settings = project.settings as { targets?: Record<string, number>; bookTarget?: number; deadline?: string };
   const plan = planOf(project);
   const patchDoc = (docId: string, patch: Partial<DocSummary>) => setDocs((ds) => ds.map((d) => (d.id === docId ? { ...d, ...patch } : d)));
   const planProps = {
@@ -457,13 +423,14 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             {total.toLocaleString()} words
             {session > 0 && <span className="session"> · +{session.toLocaleString()} this session</span>}
           </small>
-          <button className="ghost tiny" onClick={() => setExporting(true)} title="Export as ebook, Word or Markdown">
+          <button className="ghost tiny" onClick={() => setExporting(true)} title="Export as ebook, print-ready PDF, Word or Markdown">
             Export
           </button>
         </div>
         <div className="binder-tree">{tree.map((n) => renderNode(n, 0))}</div>
         <div className="binder-foot">
           <TargetMeter label="book" words={total} target={settings.bookTarget} onChange={(bookTarget) => saveSettings({ bookTarget })} />
+          <BookDeadline project={project} total={total} onChange={(deadline) => saveSettings({ deadline })} />
         </div>
       </aside>
 

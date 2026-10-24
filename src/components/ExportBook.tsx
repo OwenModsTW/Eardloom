@@ -5,7 +5,8 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { FileText, Folder } from "lucide-react";
 import { api } from "../lib/api";
 import { useStore } from "../store";
-import { buildBook, EXTENSIONS, readingOrder, type BookFormat, type BookOptions } from "../lib/export/book";
+import { buildBook, EXTENSIONS, readingOrder, TRIMS, type BookFormat, type BookOptions, type Paper, type PdfLayout, type Trim } from "../lib/export/book";
+import { Select } from "./Select";
 import type { DocSummary, Project } from "../lib/types";
 import { getDefaultAuthor } from "../lib/prefs";
 
@@ -23,6 +24,9 @@ export function ExportBook({ project, onClose }: { project: Project; onClose: ()
   const [plainLinks, setPlainLinks] = useState(saved.plainLinks ?? true);
   const [folderHeadings, setFolderHeadings] = useState(saved.folderHeadings ?? false);
   const [chapterTitles, setChapterTitles] = useState(saved.chapterTitles ?? true);
+  const [pdfLayout, setPdfLayout] = useState<PdfLayout>(saved.pdfLayout ?? "paperback");
+  const [trim, setTrim] = useState<Trim>(saved.trim ?? "5.5x8.5");
+  const [paper, setPaper] = useState<Paper>(saved.paper ?? "letter");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,9 +74,9 @@ export function ExportBook({ project, onClose }: { project: Project; onClose: ()
         filters: [{ name, extensions: [ext] }],
       });
       if (!path) return setBusy(false);
-      const opts: BookOptions = { title, author, format, include: docs.filter((d) => include.has(d.id)).map((d) => d.id), plainLinks, folderHeadings, chapterTitles };
+      const opts: BookOptions = { title, author, format, include: docs.filter((d) => include.has(d.id)).map((d) => d.id), plainLinks, folderHeadings, chapterTitles, pdfLayout, trim, paper };
       await writeFile(path, await buildBook(project.id, opts));
-      const remembered: Saved = { title, author, format, plainLinks, folderHeadings, chapterTitles };
+      const remembered: Saved = { title, author, format, plainLinks, folderHeadings, chapterTitles, pdfLayout, trim, paper };
       await api.saveProject({ ...project, settings: { ...project.settings, export: remembered } });
       await refreshProjects();
       notify(`Exported ${chapters} chapter${chapters === 1 ? "" : "s"} to ${path.split(/[\\/]/).pop()}`);
@@ -111,10 +115,46 @@ export function ExportBook({ project, onClose }: { project: Project; onClose: ()
                     {f === "epub" && "E-readers, Apple Books, Kindle (via Send to Kindle)"}
                     {f === "docx" && "Word, Google Docs, editors and agents"}
                     {f === "md" && "Plain text for other tools, websites, Obsidian"}
+                    {f === "pdf" && "A manuscript for agents and editors, or a paperback ready to print"}
                   </small>
                 </button>
               ))}
             </div>
+
+            {format === "pdf" && (
+              <>
+                <div className="field">
+                  <span>Layout</span>
+                  <div className="segmented">
+                    <button className={pdfLayout === "paperback" ? "on" : ""} onClick={() => setPdfLayout("paperback")}>
+                      Paperback
+                    </button>
+                    <button className={pdfLayout === "manuscript" ? "on" : ""} onClick={() => setPdfLayout("manuscript")}>
+                      Manuscript
+                    </button>
+                  </div>
+                </div>
+                {pdfLayout === "paperback" ? (
+                  <label className="field">
+                    <span>Trim size</span>
+                    <Select value={trim} onChange={setTrim} options={(Object.keys(TRIMS) as Trim[]).map((t) => ({ value: t, label: TRIMS[t].label }))} />
+                    <small className="hint">
+                      Book typeface, justified text, chapter openings, running heads and page numbers. Margins allow for the
+                      binding at this page count, as print-on-demand services ask.
+                    </small>
+                  </label>
+                ) : (
+                  <label className="field">
+                    <span>Paper</span>
+                    <Select value={paper} onChange={setPaper} options={[{ value: "letter", label: "US Letter" }, { value: "a4", label: "A4" }]} />
+                    <small className="hint">
+                      Standard manuscript format: Courier, double spaced, one-inch margins, your surname, title and page number on
+                      every page, and a title page with the word count.
+                    </small>
+                  </label>
+                )}
+              </>
+            )}
 
             <span className="field-label">Options</span>
             <label className="check">

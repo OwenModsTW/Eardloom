@@ -33,6 +33,9 @@ test("every page opens without errors", async ({ page }) => {
     await s.store.getState().openWorld(s.world as never);
   });
   await visit(page, "01-dashboard");
+  // Writing goals: today's words, the streak and the book's deadline pace.
+  await expect(page.locator(".writing-today")).toContainText("day streak");
+  await expect(page.locator(".writing-today .deadlines")).toContainText("words a day");
 
   // The codex
   await visit(page, "02-category-table", { view: "type", typeId: "t_char" });
@@ -98,6 +101,16 @@ test("every page opens without errors", async ({ page }) => {
   await page.locator('button[title^="Side by side"]').click();
   await page.locator('button[title^="Find in book"]').click();
   await visit(page, "19-find-in-book");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".binder-foot .deadline")).toContainText("words a day");
+  await page.locator('button[title^="Export as"]').click();
+  await page.locator(".format-list button", { hasText: "Print-ready PDF" }).click();
+  await expect(page.getByText("Trim size")).toBeVisible();
+  await visit(page, "19a-export-pdf");
+  await page.locator(".segmented button", { hasText: "Manuscript" }).click();
+  await expect(page.getByText("Standard manuscript format")).toBeVisible();
+  await visit(page, "19b-export-manuscript");
+  await page.keyboard.press("Escape");
 
   // Everything else
   await visit(page, "20-timeline", { view: "timeline" });

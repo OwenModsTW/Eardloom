@@ -155,6 +155,15 @@ const MIGRATIONS: &[&str] = &[
     "#,
     // v9: scene details for each manuscript document: POV, location, who's present, date, plot threads
     "ALTER TABLE docs ADD COLUMN meta TEXT NOT NULL DEFAULT '{}';",
+    // v10: words written each day (local date) in each book, for writing goals and streaks
+    r#"
+    CREATE TABLE writing_log (
+        day        TEXT NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        words      INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, project_id)
+    );
+    "#,
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

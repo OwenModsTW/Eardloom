@@ -128,6 +128,15 @@ else
     source: "https://wordnet.princeton.edu",
     texts: [store(readFileSync(wordnetLicence, "utf8"))],
   });
+// Typefaces bundled for print-ready books.
+for (const [name, file, source] of [
+  ["Crimson Text (book typeface)", "crimsontext-OFL.txt", "https://github.com/google/fonts/tree/main/ofl/crimsontext"],
+  ["Courier Prime (manuscript typeface)", "courierprime-OFL.txt", "https://github.com/google/fonts/tree/main/ofl/courierprime"],
+]) {
+  const path = join(root, "public", "fonts", file);
+  if (!existsSync(path)) problems.push(`${name}: licence not found`);
+  else packages.push({ name, version: "", kind: "font", licence: "OFL-1.1", source, texts: [store(readFileSync(path, "utf8"))] });
+}
 
 const downloaded = [
   { name: "llama.cpp (assistant engine)", version: "b11722", kind: "download", licence: "MIT", source: "https://github.com/ggml-org/llama.cpp", texts: [store(MIT_GGML)] },

@@ -5,7 +5,7 @@ import { Search, X } from "lucide-react";
 interface Pkg {
   name: string;
   version: string;
-  kind: "npm" | "crate" | "download" | "data";
+  kind: "npm" | "crate" | "download" | "data" | "font";
   licence: string;
   source: string;
   texts: string[];
@@ -64,8 +64,8 @@ function LicencesDialog({ onClose }: { onClose: () => void }) {
                   <button className="licence-row" onClick={() => setOpen(open === id ? null : id)}>
                     <strong>{p.name}</strong>
                     <small>
-                      {p.version} · {p.licence}
-                      {p.kind === "download" ? " · downloaded on request" : p.kind === "data" ? " · built-in data" : ""}
+                      {p.version ? `${p.version} · ` : ""}{p.licence}
+                      {p.kind === "download" ? " · downloaded on request" : p.kind === "data" ? " · built-in data" : p.kind === "font" ? " · built-in typeface" : ""}
                     </small>
                   </button>
                   {open === id && data && (

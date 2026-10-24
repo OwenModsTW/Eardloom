@@ -6,6 +6,7 @@
 import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { JSONContent } from "@tiptap/react";
 import { useStore } from "../store";
+import { localDay } from "../lib/goals";
 import type * as B from "../lib/bindings";
 import type { Calendar, Doc, DocSummary, Entry, EntryType, Project, SceneMeta, TimelineItem } from "../lib/types";
 import type { WorldMap } from "../lib/maps/model";
@@ -70,7 +71,7 @@ const entries = new Map<string, Entry>(
 
 const project: Project = {
   id: "p_book", title: "The Long Tide", kind: "book", description: "", sort: 0,
-  settings: { threads: [{ id: "th_ship", name: "The missing ship", color: "#5fb0c9" }, { id: "th_feud", name: "The family feud", color: "#c96d6d" }] },
+  settings: { threads: [{ id: "th_ship", name: "The missing ship", color: "#5fb0c9" }, { id: "th_feud", name: "The family feud", color: "#c96d6d" }], bookTarget: 80000, deadline: "2027-03-01" },
 };
 const scene = (m: SceneMeta) => m;
 const docs = new Map<string, Doc>(
@@ -180,6 +181,8 @@ const commands: Record<string, (a: Args) => unknown> = {
   writing_overview: (): B.WritingOverview => ({
     recent: [{ id: "d_ch1", projectId: "p_book", title: "Chapter 1", wordCount: 22, updatedAt: NOW }],
     totals: [{ projectId: "p_book", words: 35, documents: 3 }],
+    // A month of writing ending today, with a few days off.
+    days: Array.from({ length: 30 }, (_, i) => ({ day: localDay(new Date(Date.now() - (29 - i) * 86_400_000)), projectId: "p_book", words: [0, 4, 11].includes(i) ? 0 : 300 + ((i * 397) % 900) })),
   }),
   list_snapshots: (): B.SnapshotSummary[] => [{ id: "s1", name: "First draft", automatic: false, wordCount: 18, createdAt: "2026-10-20 09:00:00.000" }],
   get_snapshot_body: () => doc(p(t("The fog came in slowly."))),

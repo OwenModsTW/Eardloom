@@ -25,7 +25,20 @@ import { mentionText } from "../editor/mention";
 import { useStore } from "../../store";
 import type { DocSummary } from "../types";
 
-export type BookFormat = "epub" | "docx" | "md";
+export type BookFormat = "epub" | "docx" | "md" | "pdf";
+
+/** Print-ready PDF settings. */
+export type PdfLayout = "manuscript" | "paperback";
+export type Trim = "5x8" | "5.25x8" | "5.5x8.5" | "6x9" | "a5";
+export type Paper = "letter" | "a4";
+
+export const TRIMS: Record<Trim, { label: string; size: [number, number] }> = {
+  "5x8": { label: "5 × 8 in", size: [360, 576] },
+  "5.25x8": { label: "5.25 × 8 in", size: [378, 576] },
+  "5.5x8.5": { label: "5.5 × 8.5 in", size: [396, 612] },
+  "6x9": { label: "6 × 9 in", size: [432, 648] },
+  a5: { label: "A5 (148 × 210 mm)", size: [419.53, 595.28] },
+};
 
 export interface BookOptions {
   title: string;
@@ -41,9 +54,14 @@ export interface BookOptions {
   chapterTitles: boolean;
   /** Markdown only: added to heading levels inside the text (2 below a book's chapter titles). */
   headingOffset?: number;
+  /** PDF only: a standard manuscript, or a paperback interior at a trim size. */
+  pdfLayout?: PdfLayout;
+  trim?: Trim;
+  /** Manuscript paper size. */
+  paper?: Paper;
 }
 
-interface Section {
+export interface Section {
   kind: "part" | "chapter";
   title: string;
   body: JSONContent | null;
@@ -477,11 +495,13 @@ export const EXTENSIONS: Record<BookFormat, { ext: string; name: string }> = {
   epub: { ext: "epub", name: "EPUB ebook" },
   docx: { ext: "docx", name: "Word document" },
   md: { ext: "md", name: "Markdown" },
+  pdf: { ext: "pdf", name: "Print-ready PDF" },
 };
 
 export async function buildBook(projectId: string, opts: BookOptions): Promise<Uint8Array> {
   const sections = await gather(projectId, opts);
   if (opts.format === "epub") return toEpub(sections, opts);
   if (opts.format === "docx") return toDocx(sections, opts);
+  if (opts.format === "pdf") return (await import("./bookpdf")).bookPdf(sections, opts);
   return toMarkdown(sections, opts);
 }

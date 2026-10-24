@@ -426,3 +426,10 @@ and/or database.  Title to copyright in this software, database and
 any associated documentation shall at all times remain with  
 Princeton University and LICENSEE agrees to preserve same.  
 ```
+
+## Crimson Text and Courier Prime (book typefaces)
+
+Print-ready book PDFs use Crimson Text (Copyright 2010 The Crimson Text Project Authors) and
+Courier Prime (Copyright 2015 The Courier Prime Project Authors), bundled unmodified under the
+SIL Open Font License 1.1 (https://openfontlicense.org). The full licence texts ship with the
+app in `public/fonts/` and are shown under About.
