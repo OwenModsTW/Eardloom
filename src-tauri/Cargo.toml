@@ -48,3 +48,6 @@ tauri-plugin-updater = "2"
 clipboard-win = "5.4.1"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
 
+[dev-dependencies]
+# Writes the TypeScript types the app uses for what commands return (cargo test).
+ts-rs = { version = "12", features = ["serde-json-impl"] }

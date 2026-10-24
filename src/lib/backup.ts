@@ -1,3 +1,4 @@
+import type { BackupOutcome } from "./bindings";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface BackupPrefs {
@@ -43,7 +44,7 @@ export async function backupDir() {
 
 export async function backupNow(force = false) {
   const prefs = getBackupPrefs();
-  return invoke<{ created: boolean; removed: number; totalSize: number }>("run_backup", {
+  return invoke<BackupOutcome>("run_backup", {
     dir: await backupDir(),
     maxMb: prefs.maxMb,
     force,

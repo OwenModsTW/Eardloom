@@ -13,6 +13,7 @@ const DATE_KIND: &str = "worlddate";
 /// One dated field on one entry, e.g. a character's "Born".
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct TimelineItem {
     pub entry_id: String,
     pub type_id: String,

@@ -178,6 +178,7 @@ fn hex(bytes: &[u8]) -> String {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ModelInfo {
     id: String,
     label: String,
@@ -188,6 +189,7 @@ pub struct ModelInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct LocalAiStatus {
     engine_installed: bool,
     engine_bytes: u64,
@@ -234,6 +236,7 @@ pub fn local_ai_status(app: AppHandle, state: State<LocalAi>) -> CmdResult<Local
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Device {
     /// The engine's name for it, e.g. "Vulkan0".
     id: String,

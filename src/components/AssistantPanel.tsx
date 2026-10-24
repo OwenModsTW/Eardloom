@@ -10,6 +10,7 @@ import { useActiveEditor } from "../lib/editor/comment";
 import { Markdown } from "./Markdown";
 import { ProposalDetails, PROPOSAL_TITLES } from "./AiProposals";
 import type { Entry } from "../lib/types";
+import type { SavedChat } from "../lib/bindings";
 
 type Item =
   | { kind: "user"; id: string; text: string }
@@ -181,7 +182,7 @@ export function AssistantPanel() {
     setState("loading");
     setError(null);
     setSubject(wanted);
-    invoke<{ data: string; updated_at: string } | null>("assistant_chat_load", { subject: wanted })
+    invoke<SavedChat | null>("assistant_chat_load", { subject: wanted })
       .then((row) => {
         if (useStore.getState().world?.path !== worldPath) return;
         let saved: Saved = { items: [], history: [] };

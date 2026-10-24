@@ -19,6 +19,7 @@ const DAY: i64 = 86_400;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct BackupInfo {
     pub file: String,
     pub path: String,
@@ -29,6 +30,7 @@ pub struct BackupInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct BackupOutcome {
     /// False when nothing had changed since the last backup.
     pub created: bool,

@@ -9,6 +9,7 @@ use tauri::State;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct EntryType {
     pub id: String,
     pub name: String,
@@ -23,6 +24,7 @@ pub struct EntryType {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Entry {
     pub id: String,
     pub type_id: String,
@@ -44,6 +46,7 @@ pub struct Entry {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct EntrySummary {
     pub id: String,
     pub type_id: String,
@@ -58,6 +61,7 @@ pub struct EntrySummary {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Backlink {
     pub source_kind: String,
     pub source_id: String,
@@ -69,6 +73,7 @@ pub struct Backlink {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SearchHit {
     pub kind: String,
     pub id: String,
@@ -403,6 +408,7 @@ pub fn incoming_link_counts(state: State<AppState>) -> CmdResult<std::collection
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct GraphLink {
     pub source_kind: String,
     pub source_id: String,
@@ -413,6 +419,7 @@ pub struct GraphLink {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct GraphDoc {
     pub id: String,
     pub project_id: String,
@@ -420,6 +427,7 @@ pub struct GraphDoc {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Graph {
     pub links: Vec<GraphLink>,
     pub docs: Vec<GraphDoc>,
@@ -463,6 +471,7 @@ pub fn link_graph(state: State<AppState>) -> CmdResult<Graph> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct EntryVersionSummary {
     pub id: String,
     pub name: String,

@@ -37,6 +37,7 @@ impl AppState {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct RecentWorld {
     pub path: String,
     pub name: String,
@@ -45,6 +46,7 @@ pub struct RecentWorld {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct WorldInfo {
     pub path: String,
     pub assets_path: String,

@@ -691,6 +691,7 @@ fn claude_code_connected() -> bool {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ConnectorStatus {
     pub exe: String,
     pub claude_desktop_installed: bool,
@@ -949,6 +950,7 @@ pub fn assistant_context(app: AppHandle, query: String, entry_id: Option<String>
 
 /// The built-in assistant's saved conversation about one entry, chapter or the whole world.
 #[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SavedChat {
     data: String,
     updated_at: String,

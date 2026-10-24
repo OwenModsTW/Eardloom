@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type * as B from "./bindings";
 
 type WorldSetting = "cover" | "pinned" | "dictionary" | "entry_templates";
 import type { JSONContent } from "@tiptap/react";
@@ -45,7 +46,7 @@ export const api = {
   createEntryVersion: (entryId: string, name: string, automatic = false) =>
     invoke<boolean>("create_entry_version", { id: crypto.randomUUID(), entryId, name, automatic }),
   listEntryVersions: (entryId: string) =>
-    invoke<{ id: string; name: string; automatic: boolean; wordCount: number; createdAt: string }[]>("list_entry_versions", { entryId }),
+    invoke<B.EntryVersionSummary[]>("list_entry_versions", { entryId }),
   getEntryVersion: (id: string) => invoke<EntryVersionData>("get_entry_version", { id }),
   renameEntryVersion: (id: string, name: string) => invoke<void>("rename_entry_version", { id, name }),
   deleteEntryVersion: (id: string) => invoke<void>("delete_entry_version", { id }),
@@ -66,13 +67,13 @@ export const api = {
   createSnapshot: (docId: string, name: string, automatic = false) =>
     invoke<void>("create_snapshot", { id: crypto.randomUUID(), docId, name, automatic }),
   listSnapshots: (docId: string) =>
-    invoke<{ id: string; name: string; automatic: boolean; wordCount: number; createdAt: string }[]>("list_snapshots", { docId }),
+    invoke<B.SnapshotSummary[]>("list_snapshots", { docId }),
   getSnapshotBody: (id: string) => invoke<JSONContent | null>("get_snapshot_body", { id }),
   renameSnapshot: (id: string, name: string) => invoke<void>("rename_snapshot", { id, name }),
   deleteSnapshot: (id: string) => invoke<void>("delete_snapshot", { id }),
   clipboardRtf: () => invoke<string | null>("clipboard_rtf"),
   listComments: (docId: string) =>
-    invoke<{ id: string; docId: string; body: string; resolved: boolean; createdAt: string }[]>("list_comments", { docId }),
+    invoke<B.Comment[]>("list_comments", { docId }),
   saveComment: (comment: { id: string; docId: string; body: string; resolved: boolean; createdAt?: string }) =>
     invoke<void>("save_comment", { comment: { createdAt: "", ...comment } }),
   deleteComment: (id: string) => invoke<void>("delete_comment", { id }),
@@ -85,10 +86,7 @@ export const api = {
   getWorldSetting: (key: WorldSetting) => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: WorldSetting, value: string | null) => invoke<void>("set_world_setting", { key, value }),
   writingOverview: () =>
-    invoke<{
-      recent: { id: string; projectId: string; title: string; wordCount: number; updatedAt: string }[];
-      totals: { projectId: string; words: number; documents: number }[];
-    }>("writing_overview"),
+    invoke<B.WritingOverview>("writing_overview"),
   incomingLinkCounts: () => invoke<Record<string, number>>("incoming_link_counts"),
   getCalendar: () => invoke<Calendar | null>("get_calendar"),
   saveCalendar: (calendar: Calendar) => invoke<void>("save_calendar", { calendar }),

@@ -21,3 +21,12 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: cargo test --manifest-path src-tauri/Cargo.toml
+      # The app's copy of the backend's types must match the Rust code (cargo test regenerates them).
+      - name: Generated types are up to date
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain -- src/generated/bindings)" ]; then
+            echo "src/generated/bindings is out of date: run cargo test and commit the changes."
+            git status --short -- src/generated/bindings
+            exit 1
+          fi

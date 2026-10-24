@@ -1,18 +1,10 @@
+import type { ConnectorStatus } from "../lib/bindings";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, Copy } from "lucide-react";
 import { useStore } from "../store";
 
-interface Status {
-  exe: string;
-  claudeDesktopInstalled: boolean;
-  claudeDesktopConnected: boolean;
-  codexInstalled: boolean;
-  codexConnected: boolean;
-  claudeCodeInstalled: boolean;
-  claudeCodeConnected: boolean;
-  claudeCodeCommand: string;
-}
+type Status = ConnectorStatus;
 
 const PRIVATE_KEY = "eardloom.aiPrivate";
 

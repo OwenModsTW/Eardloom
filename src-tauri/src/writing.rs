@@ -10,6 +10,7 @@ use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Project {
     pub id: String,
     pub title: String,
@@ -21,6 +22,7 @@ pub struct Project {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct DocSummary {
     pub id: String,
     pub project_id: String,
@@ -36,6 +38,7 @@ pub struct DocSummary {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Doc {
     pub id: String,
     pub project_id: String,
@@ -261,6 +264,7 @@ pub fn delete_doc(state: State<AppState>, id: String) -> CmdResult<()> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct RecentDoc {
     pub id: String,
     pub project_id: String,
@@ -271,6 +275,7 @@ pub struct RecentDoc {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct ProjectTotals {
     pub project_id: String,
     pub words: i64,
@@ -279,6 +284,7 @@ pub struct ProjectTotals {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct WritingOverview {
     pub recent: Vec<RecentDoc>,
     pub totals: Vec<ProjectTotals>,
@@ -317,6 +323,7 @@ pub fn writing_overview(state: State<AppState>) -> CmdResult<WritingOverview> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct SnapshotSummary {
     pub id: String,
     pub name: String,
@@ -490,6 +497,7 @@ pub fn update_doc_details(state: State<AppState>, id: String, details: DocDetail
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Comment {
     pub id: String,
     pub doc_id: String,

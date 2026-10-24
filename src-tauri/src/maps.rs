@@ -9,6 +9,7 @@ use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct WorldMap {
     pub id: String,
     pub title: String,

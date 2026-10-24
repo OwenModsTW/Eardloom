@@ -1,0 +1,5 @@
+[env]
+# TypeScript types for what the app's commands return, written by ts-rs during cargo test.
+# Here at the top so it applies wherever cargo runs from.
+TS_RS_EXPORT_DIR = { value = "src/generated/bindings", relative = true }
+TS_RS_LARGE_INT = "number"
