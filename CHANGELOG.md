@@ -2,6 +2,20 @@
 
 The first line under each version is the summary shown when Eardloom offers an update.
 
+## 0.1.12
+
+Your story and your world, connected: scenes, plot threads and continuity checks.
+
+- **Scene details** for every chapter (the clapperboard button while writing): whose point of view, where, when on your world's calendar, and which plot threads it moves on. Who's in the scene fills itself in from your @mentions; add anyone unnamed, or mark someone as only mentioned.
+- **Plot threads**: a new Threads view shows each storyline across the book, chapter by chapter, so you can see where one has gone quiet. Cards and Outline show each chapter's point of view, place, date and threads.
+- **Scenes on the timeline**: dated chapters sit alongside your world's history.
+- **In the story**: every entry lists the chapters it's part of, as the point of view, the setting or in the scene.
+- **Continuity checks**: flags someone in two places on the same day, appearing before they're born or after they've died, and points of view or plot threads that go quiet for a while.
+- **Better thesaurus suggestions**: everyday words first, across each meaning of the word.
+- **Fixes**: two-way relationships no longer show twice, link icons sit beside names, deleted words are struck through when comparing versions, and small text on the home page reads properly.
+
+This update upgrades your worlds' storage. After updating, older versions of Eardloom can't open them.
+
 ## 0.1.11
 
 A thesaurus: right-click any word for alternatives.
