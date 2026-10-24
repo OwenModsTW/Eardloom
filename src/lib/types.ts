@@ -170,6 +170,22 @@ export interface DocSummary {
   label: string;
   wordCount: number;
   sort: number;
+  /** What happens in it, in terms of the world: who, where, when and which plot threads. */
+  meta: SceneMeta;
+}
+
+/** A manuscript document's scene details. Entry ids throughout. */
+export interface SceneMeta {
+  /** Whose point of view it's told from. */
+  pov?: string;
+  location?: string;
+  /** When it happens, on the world's calendar. */
+  date?: WorldDate;
+  /** Plot threads it moves forward (ids from the book's settings). */
+  threads?: string[];
+  /** Who's there besides those mentioned in the text, and who's mentioned but not there. */
+  present?: string[];
+  absent?: string[];
 }
 
 export interface Doc extends DocSummary {

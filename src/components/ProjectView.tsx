@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   ChevronDown, ChevronRight, ExternalLink, FilePlus, FileText, Folder, FolderPlus, PanelRightClose,
-  BookOpen, Columns2, FileSearch, History, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
+  BookOpen, Clapperboard, Columns2, FileSearch, History, ListChecks, Maximize2, MessageSquare, Minimize2, PanelRightOpen, Search, Trash2,
 } from "lucide-react";
 import { api, newId } from "../lib/api";
 import { useStore } from "../store";
@@ -18,6 +18,7 @@ import { CommentsPanel } from "./Comments";
 import { SplitPane, type SplitTarget } from "./SplitPane";
 import { FolderFlow } from "./FolderFlow";
 import { BookFind } from "./BookFind";
+import { ContinuityPanel, ScenePanel, ThreadsView } from "./Scenes";
 import { snapshotBeforeFirstEdit } from "../lib/editor/autoSnapshot";
 import { useActiveEditor } from "../lib/editor/comment";
 import { planOf } from "../lib/plan";
@@ -92,22 +93,24 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [loreId, setLoreId] = useState<string | null>(null);
   // The panel beside the manuscript: lore, snapshots, comments or find in book.
-  const [side, setSide] = useState<"lore" | "snaps" | "comments" | "find" | null>("lore");
+  const [side, setSide] = useState<"lore" | "snaps" | "comments" | "find" | "scene" | "checks" | null>("lore");
   const toggleSide = (s: NonNullable<typeof side>) => setSide((cur) => (cur === s ? null : s));
   const loreOpen = side === "lore";
   const snapsOpen = side === "snaps";
   const commentsOpen = side === "comments";
   const findOpen = side === "find";
+  const sceneOpen = side === "scene";
+  const checksOpen = side === "checks";
   const modeKey = `eardloom.mode.${id}`;
-  const [mode, setModeState] = useState<"write" | "cards" | "outline">(() => {
+  const [mode, setModeState] = useState<"write" | "cards" | "outline" | "threads">(() => {
     try {
       const m = localStorage.getItem(modeKey);
-      return m === "cards" || m === "outline" ? m : "write";
+      return m === "cards" || m === "outline" || m === "threads" ? m : "write";
     } catch {
       return "write";
     }
   });
-  const setMode = (m: "write" | "cards" | "outline") => {
+  const setMode = (m: "write" | "cards" | "outline" | "threads") => {
     setModeState(m);
     try {
       localStorage.setItem(modeKey, m);
@@ -305,6 +308,7 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
       body: null,
       sort: Math.max(0, ...siblings.map((s) => s.sort)) + 1,
       wordCount: 0,
+      meta: {},
     };
     await api.saveDoc(doc);
     await reload();
@@ -473,9 +477,9 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
           {!focusMode && (
             <div className="mode-bar">
               <div className="segmented">
-                {(["write", "cards", "outline"] as const).map((m) => (
+                {(["write", "cards", "outline", "threads"] as const).map((m) => (
                   <button key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)}>
-                    {m === "write" ? "Write" : m === "cards" ? "Cards" : "Outline"}
+                    {m === "write" ? "Write" : m === "cards" ? "Cards" : m === "outline" ? "Outline" : "Threads"}
                   </button>
                 ))}
               </div>
@@ -498,6 +502,16 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
               >
                 <MessageSquare size={15} />
                 {panelDocId && commentCounts[panelDocId] ? <span className="tool-badge">{commentCounts[panelDocId]}</span> : null}
+              </button>
+            )}
+            {!focusMode && (
+              <button className={`icon-btn ${sceneOpen ? "on" : ""}`} onClick={() => toggleSide("scene")} title="Scene: who, where, when and plot threads">
+                <Clapperboard size={15} />
+              </button>
+            )}
+            {!focusMode && (
+              <button className={`icon-btn ${checksOpen ? "on" : ""}`} onClick={() => toggleSide("checks")} title="Continuity checks for this book">
+                <ListChecks size={15} />
               </button>
             )}
             {!focusMode && (
@@ -529,6 +543,8 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <CardsView {...planProps} />
           ) : mode === "outline" ? (
             <OutlineView {...planProps} />
+          ) : mode === "threads" ? (
+            <ThreadsView project={project} docs={docs} patchDoc={patchDoc} openDoc={planProps.openDoc} />
           ) : flowing ? (
             <FolderFlow
               key={`${activeId}-${editorRev}`}
@@ -592,6 +608,17 @@ export function ProjectView({ id, docId }: { id: string; docId?: string }) {
             <p className="hint">Click into a chapter to see its comments.</p>
           </aside>
         ))}
+      {sceneOpen && !focusMode && (() => {
+        const doc = docs.find((d) => d.id === panelDocId && d.kind === "text");
+        return doc ? (
+          <ScenePanel key={doc.id} project={project} doc={doc} patchDoc={patchDoc} />
+        ) : (
+          <aside className="lore">
+            <p className="hint">Open a chapter to see its scene details.</p>
+          </aside>
+        );
+      })()}
+      {checksOpen && !focusMode && <ContinuityPanel project={project} docs={docs} onOpen={(d) => (setMode("write"), open(d))} />}
       {findOpen && !focusMode && (
         <BookFind
           docs={docs}

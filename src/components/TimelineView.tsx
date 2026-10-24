@@ -4,27 +4,44 @@ import { useStore } from "../store";
 import { createEntry } from "../lib/actions";
 import { eraOf, formatDate, sortKey, spanYears } from "../lib/calendar";
 import { EntryGlyph } from "./EntryIcon";
+import { BookOpen } from "lucide-react";
 import { openMenu } from "./ContextMenu";
 import type { TimelineItem, WorldDatePoint } from "../lib/types";
+
+/** Chapters with a date in their scene details sit on the timeline too, under this "type". */
+const STORY = "__story";
 
 /** Labels that just mean "the date" aren't worth repeating on every row. */
 const GENERIC = new Set(["date", "when", "date on the timeline"]);
 
 /** Every dated field in the world, in order, grouped by era. */
 export function TimelineView() {
-  const { types, calendar, entries, go } = useStore();
+  const { types, calendar, entries, go, projects } = useStore();
   const [items, setItems] = useState<TimelineItem[] | null>(null);
+  const [story, setStory] = useState<(TimelineItem & { projectId: string })[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api.timelineItems().then(setItems);
-  }, [entries]);
+    // Scenes from the books, dated on the world's calendar.
+    api.sceneIndex().then((scenes) =>
+      setStory(
+        scenes
+          .filter((s) => s.meta.date)
+          .map((s) => {
+            const pov = entries.find((e) => e.id === s.meta.pov)?.title;
+            const book = projects.find((p) => p.id === s.projectId)?.title ?? "";
+            return { entryId: s.id, projectId: s.projectId, typeId: STORY, title: s.title, summary: [book, pov && `POV ${pov}`].filter(Boolean).join(" · "), emoji: null, fieldId: "scene", date: s.meta.date! };
+          }),
+      ),
+    );
+  }, [entries, projects]);
 
   const datedTypes = types.filter((t) => t.fields.some((f) => f.kind === "worlddate"));
   const fieldLabel = (it: TimelineItem) => types.find((t) => t.id === it.typeId)?.fields.find((f) => f.id === it.fieldId)?.label ?? "";
 
   const groups = useMemo(() => {
-    const visible = (items ?? [])
+    const visible = [...(items ?? []), ...story]
       .filter((it) => !hidden.has(it.typeId))
       .sort((a, b) => sortKey(calendar, a.date) - sortKey(calendar, b.date) || a.title.localeCompare(b.title));
     const out: { eraId: string; items: TimelineItem[] }[] = [];
@@ -34,7 +51,7 @@ export function TimelineView() {
       last && last.eraId === eraId ? last.items.push(it) : out.push({ eraId, items: [it] });
     }
     return out;
-  }, [items, hidden, calendar]);
+  }, [items, story, hidden, calendar]);
 
   const addMenu = (e: React.MouseEvent) =>
     openMenu(
@@ -61,7 +78,7 @@ export function TimelineView() {
         </div>
       </header>
 
-      {datedTypes.length > 0 && (
+      {(datedTypes.length > 0 || story.length > 0) && (
         <div className="timeline-filters">
           {datedTypes.map((t) => (
             <button
@@ -77,10 +94,22 @@ export function TimelineView() {
               {t.plural}
             </button>
           ))}
+          {story.length > 0 && (
+            <button
+              className={hidden.has(STORY) ? "" : "on"}
+              onClick={() => {
+                const next = new Set(hidden);
+                next.has(STORY) ? next.delete(STORY) : next.add(STORY);
+                setHidden(next);
+              }}
+            >
+              Story
+            </button>
+          )}
         </div>
       )}
 
-      {datedTypes.length === 0 ? (
+      {datedTypes.length === 0 && story.length === 0 ? (
         <div className="blank-slate">
           <p>
             The timeline is built from dates on your entries. Give a category a <strong>Date on the timeline</strong> field
@@ -118,6 +147,24 @@ export function TimelineView() {
                   const span = spanYears(calendar, it.date);
                   const newYear = i === 0 || yearOf(g.items[i - 1].date) !== yearOf(it.date);
                   const t = types.find((x) => x.id === it.typeId);
+                  if (it.typeId === STORY) {
+                    const scene = it as (typeof story)[number];
+                    return (
+                      <li key={`story-${it.entryId}`} className={`story ${newYear ? "new-year" : ""}`}>
+                        <span className="chron-year">{newYear ? it.date.year : ""}</span>
+                        <span className="chron-dot" />
+                        <div className="chron-body">
+                          <button className="link chron-title" onClick={() => go({ view: "project", id: scene.projectId, docId: it.entryId })}>
+                            <BookOpen size={14} />
+                            {it.title || "Untitled"}
+                            <span className="chron-label">in the story</span>
+                          </button>
+                          <div className="chron-date">{formatDate(calendar, it.date)}</div>
+                          {it.summary && <p className="chron-summary">{it.summary}</p>}
+                        </div>
+                      </li>
+                    );
+                  }
                   return (
                     <li key={`${it.entryId}-${it.fieldId}`} className={newYear ? "new-year" : ""} style={{ "--chip": t?.color } as React.CSSProperties}>
                       <span className="chron-year">{newYear ? it.date.year : ""}</span>

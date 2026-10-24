@@ -7,7 +7,7 @@ import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks"
 import type { JSONContent } from "@tiptap/react";
 import { useStore } from "../store";
 import type * as B from "../lib/bindings";
-import type { Calendar, Doc, Entry, EntryType, Project, TimelineItem } from "../lib/types";
+import type { Calendar, Doc, DocSummary, Entry, EntryType, Project, SceneMeta, TimelineItem } from "../lib/types";
 import type { WorldMap } from "../lib/maps/model";
 
 const WORLD: B.WorldInfo = { path: "C:/Sample World", assetsPath: "C:/Sample World/assets", name: "The Sample Isles", description: "A small world for testing.", genre: "fantasy" };
@@ -58,6 +58,7 @@ const entries = new Map<string, Entry>(
       ),
     }),
     entry({ id: "e_rhys", typeId: "t_char", title: "Rhys Arandel", summary: "A retired shipwright.", fields: { f_born: { year: 380, era: "era_2" }, f_home: "e_harbour" } }),
+    entry({ id: "e_cove", typeId: "t_place", title: "Saltmarsh Cove", summary: "A fishing village down the coast." }),
     entry({ id: "e_mara", typeId: "t_char", title: "Mara Arandel", summary: "Vex's younger sister.", fields: { f_parents: ["e_rhys"] }, visibility: "spoiler" }),
     entry({ id: "e_ilse", typeId: "t_char", title: "Ilse Varn", summary: "A cartographer.", fields: { f_partners: ["e_vex"] }, visibility: "private" }),
     entry({
@@ -67,16 +68,22 @@ const entries = new Map<string, Entry>(
   ].map((e) => [e.id, e]),
 );
 
-const project: Project = { id: "p_book", title: "The Long Tide", kind: "book", description: "", sort: 0, settings: {} };
+const project: Project = {
+  id: "p_book", title: "The Long Tide", kind: "book", description: "", sort: 0,
+  settings: { threads: [{ id: "th_ship", name: "The missing ship", color: "#5fb0c9" }, { id: "th_feud", name: "The family feud", color: "#c96d6d" }] },
+};
+const scene = (m: SceneMeta) => m;
 const docs = new Map<string, Doc>(
   [
-    { id: "d_part", projectId: "p_book", parentId: null, kind: "folder", title: "Part One", synopsis: "", status: "", label: "", wordCount: 0, sort: 1, body: null },
+    { id: "d_part", projectId: "p_book", parentId: null, kind: "folder", title: "Part One", synopsis: "", status: "", label: "", wordCount: 0, sort: 1, body: null, meta: {} },
     {
       id: "d_ch1", projectId: "p_book", parentId: "d_part", kind: "text", title: "Chapter 1", synopsis: "The fog arrives.", status: "", label: "", wordCount: 22, sort: 1,
+      meta: scene({ pov: "e_vex", location: "e_harbour", date: { year: 431, era: "era_2", month: 0, day: 3 }, threads: ["th_ship"], present: ["e_rhys"] }),
       body: doc(p(t("The fog came in fast, and "), mention("e_vex", "Vex Arandel", "Vex"), t(" was running along the quay before the bells began.")), p(t("Nobody "), { type: "text", text: "noticed", marks: [{ type: "comment", attrs: { id: "c1" } }] }, t(" the ship."))),
     },
-    { id: "d_ch2", projectId: "p_book", parentId: "d_part", kind: "text", title: "Chapter 2", synopsis: "", status: "", label: "", wordCount: 9, sort: 2, body: doc(p(t("Morning, and the harbour was quiet again."))) },
-    { id: "d_ch3", projectId: "p_book", parentId: null, kind: "text", title: "Interlude", synopsis: "", status: "", label: "", wordCount: 4, sort: 2, body: doc(p(t("A letter, unsent."))) },
+    // Rhys is somewhere else on the same day: a continuity check should notice.
+    { id: "d_ch2", projectId: "p_book", parentId: "d_part", kind: "text", title: "Chapter 2", synopsis: "", status: "", label: "", wordCount: 9, sort: 2, body: doc(p(t("Morning, and the harbour was quiet again."))), meta: scene({ pov: "e_rhys", location: "e_cove", date: { year: 431, era: "era_2", month: 0, day: 3 }, threads: ["th_feud"], present: ["e_rhys"] }) },
+    { id: "d_ch3", projectId: "p_book", parentId: null, kind: "text", title: "Interlude", synopsis: "", status: "", label: "", wordCount: 4, sort: 2, body: doc(p(t("A letter, unsent."))), meta: {} },
   ].map((d) => [d.id, d as Doc]),
 );
 
@@ -116,7 +123,7 @@ function links(): B.Graph["links"] {
   return out;
 }
 const summary = (e: Entry): B.EntrySummary => ({ id: e.id, typeId: e.typeId, title: e.title, aliases: e.aliases, summary: e.summary, tags: e.tags, image: e.image, emoji: e.emoji, updatedAt: e.updatedAt ?? NOW });
-const docSummary = ({ body: _body, ...d }: Doc): B.DocSummary => d;
+const docSummary = ({ body: _body, ...d }: Doc): DocSummary => d;
 
 const localAi: B.LocalAiStatus = {
   engineInstalled: true,
@@ -167,6 +174,9 @@ const commands: Record<string, (a: Args) => unknown> = {
   list_docs: () => [...docs.values()].map(docSummary),
   get_doc: (a) => docs.get(a.id) ?? Promise.reject("No such document"),
   save_doc: (a) => (docs.set(a.doc.id, a.doc), a.doc.wordCount ?? 0),
+  update_doc_meta: (a) => void docs.set(a.id, { ...docs.get(a.id)!, meta: a.meta }),
+  scene_index: (): B.SceneInfo[] =>
+    [...docs.values()].filter((d) => d.kind === "text").map((d) => ({ id: d.id, projectId: d.projectId, title: d.title, meta: d.meta as B.SceneInfo["meta"], mentions: [...new Set(mentionsIn(d.body))] })),
   writing_overview: (): B.WritingOverview => ({
     recent: [{ id: "d_ch1", projectId: "p_book", title: "Chapter 1", wordCount: 22, updatedAt: NOW }],
     totals: [{ projectId: "p_book", words: 35, documents: 3 }],

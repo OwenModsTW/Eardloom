@@ -18,6 +18,7 @@ export type { ModelInfo } from "../generated/bindings/ModelInfo";
 export type { Project } from "../generated/bindings/Project";
 export type { RecentWorld } from "../generated/bindings/RecentWorld";
 export type { SavedChat } from "../generated/bindings/SavedChat";
+export type { SceneInfo } from "../generated/bindings/SceneInfo";
 export type { SearchHit } from "../generated/bindings/SearchHit";
 export type { SnapshotSummary } from "../generated/bindings/SnapshotSummary";
 export type { TimelineItem } from "../generated/bindings/TimelineItem";

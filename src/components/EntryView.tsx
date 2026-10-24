@@ -1,3 +1,5 @@
+import { scenesFor } from "../lib/scenes";
+import { formatDate } from "../lib/calendar";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { ClipboardCopy, Copy, FileDown, FileText, Globe, History, Image as ImageIcon, ImagePlus, LayoutTemplate, MoreHorizontal, Network, Pin, Share2, Trash2 } from "lucide-react";
@@ -407,10 +409,13 @@ function Infobox({
 
 function Backlinks({ id }: { id: string }) {
   const [links, setLinks] = useState<Backlink[]>([]);
-  const { types, projects, go } = useStore();
+  const [story, setStory] = useState<ReturnType<typeof scenesFor>>([]);
+  const { types, projects, go, calendar } = useStore();
   const entries = useStore((s) => s.entries);
   useEffect(() => {
     api.backlinks(id).then(setLinks);
+    // Chapters this entry is part of: as the point of view, the setting, or someone in the scene.
+    api.sceneIndex().then((scenes) => setStory(scenesFor(id, scenes)));
   }, [id, entries]);
 
   // Open the map centred on this entry's pin.
@@ -430,9 +435,9 @@ function Backlinks({ id }: { id: string }) {
   };
 
   const fromEntries = links.filter((l) => l.sourceKind === "entry");
-  const fromDocs = links.filter((l) => l.sourceKind === "doc");
   const onMaps = links.filter((l) => l.sourceKind === "map");
-  if (!links.length) return null;
+  if (!links.length && !story.length) return null;
+  const ROLE = { pov: "point of view", location: "setting", present: "in the scene" } as const;
 
   return (
     <footer className="backlinks">
@@ -468,16 +473,19 @@ function Backlinks({ id }: { id: string }) {
           </ul>
         </section>
       )}
-      {fromDocs.length > 0 && (
+      {story.length > 0 && (
         <section>
-          <h3>Appears in your writing</h3>
+          <h3>In the story</h3>
           <ul>
-            {fromDocs.map((l) => (
-              <li key={l.sourceId}>
-                <button className="link" onClick={() => go({ view: "project", id: l.parentId, docId: l.sourceId })}>
-                  {l.title}
+            {story.map(({ scene, role }) => (
+              <li key={scene.id}>
+                <button className="link" onClick={() => go({ view: "project", id: scene.projectId, docId: scene.id })}>
+                  {scene.title || "Untitled"}
                 </button>
-                <small>{projects.find((p) => p.id === l.parentId)?.title}</small>
+                <small>
+                  <span className={`story-role ${role}`}>{ROLE[role]}</span>
+                  {scene.meta.date ? ` · ${formatDate(calendar, scene.meta.date)}` : ""} · {projects.find((p) => p.id === scene.projectId)?.title}
+                </small>
               </li>
             ))}
           </ul>

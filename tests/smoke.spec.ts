@@ -51,11 +51,24 @@ test("every page opens without errors", async ({ page }) => {
   await page.getByRole("button", { name: "Share" }).click();
   await visit(page, "07-entry-share-menu");
   await page.keyboard.press("Escape");
+  // The chapters Vex is part of, and how.
+  await expect(page.locator(".backlinks")).toContainText("In the story");
+  await expect(page.locator(".backlinks")).toContainText("point of view");
   await visit(page, "08-place", { view: "entry", id: "e_harbour" });
   await visit(page, "09-fields", { view: "schema", typeId: "t_char" });
 
   // Writing
   await visit(page, "10-chapter", { view: "project", id: "p_book", docId: "d_ch1" });
+  // Scene details: POV, place, date, threads and who's there.
+  await page.locator('button[title^="Scene:"]').click();
+  await expect(page.locator(".scene-panel .scene-people")).toContainText("Vex Arandel");
+  await expect(page.locator(".scene-panel .scene-people")).toContainText("Rhys Arandel");
+  await visit(page, "10a-scene-panel");
+  // Rhys is in two places on the same day (Chapter 1 and 2): continuity notices.
+  await page.locator('button[title^="Continuity"]').click();
+  await expect(page.locator(".continuity-list")).toContainText("Rhys Arandel is at Highmoor Harbour");
+  await visit(page, "10b-continuity");
+  await page.locator('button[title^="Continuity"]').click();
   await page.locator(".ProseMirror").first().getByText("running").click({ button: "right" });
   await expect(page.locator(".menu")).toBeVisible();
   await expect(page.getByText("Thesaurus…")).toBeVisible();
@@ -70,6 +83,9 @@ test("every page opens without errors", async ({ page }) => {
   await visit(page, "13-cards");
   await page.getByRole("button", { name: "Outline" }).click();
   await visit(page, "14-outline");
+  await page.locator(".mode-bar .segmented button", { hasText: "Threads" }).click();
+  await expect(page.locator(".thread-cell.on")).toHaveCount(2);
+  await visit(page, "14a-threads");
   await page.locator(".mode-bar .segmented button", { hasText: "Write" }).click();
   await visit(page, "15-folder-as-one", { view: "project", id: "p_book", docId: "d_part" });
   await visit(page, "16-whole-book", { view: "project", id: "p_book", docId: "book" });
@@ -83,6 +99,7 @@ test("every page opens without errors", async ({ page }) => {
 
   // Everything else
   await visit(page, "20-timeline", { view: "timeline" });
+  await expect(page.locator(".chronicle li.story").first()).toContainText("in the story");
   await visit(page, "21-calendar", { view: "calendar" });
   await visit(page, "22-maps", { view: "maps" });
   await visit(page, "23-map", { view: "map", id: "m_isles" });

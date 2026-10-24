@@ -34,6 +34,8 @@ pub struct DocSummary {
     pub label: String,
     pub word_count: i64,
     pub sort: f64,
+    /// Scene details (POV, location, who's present, date, plot threads), owned by the app.
+    pub meta: Value,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -53,6 +55,18 @@ pub struct Doc {
     pub sort: f64,
     #[serde(default)]
     pub word_count: i64,
+    /// Scene details. Read here; saved only by `update_doc_meta`, so an editor saving the text
+    /// never overwrites details changed elsewhere.
+    #[serde(default = "empty_object")]
+    pub meta: Value,
+}
+
+fn empty_object() -> Value {
+    Value::Object(Default::default())
+}
+
+fn json_or_empty(s: String) -> Value {
+    serde_json::from_str(&s).unwrap_or_else(|_| empty_object())
 }
 
 #[derive(Deserialize)]
@@ -130,7 +144,7 @@ pub fn list_docs(state: State<AppState>, project_id: String) -> CmdResult<Vec<Do
         let mut stmt = w
             .conn
             .prepare(
-                "SELECT id, project_id, parent_id, kind, title, synopsis, status, word_count, sort, label
+                "SELECT id, project_id, parent_id, kind, title, synopsis, status, word_count, sort, label, meta
                    FROM docs WHERE project_id = ?1 ORDER BY sort",
             )
             .map_err(err)?;
@@ -147,6 +161,7 @@ pub fn list_docs(state: State<AppState>, project_id: String) -> CmdResult<Vec<Do
                     word_count: r.get(7)?,
                     sort: r.get(8)?,
                     label: r.get(9)?,
+                    meta: json_or_empty(r.get(10)?),
                 })
             })
             .map_err(err)?;
@@ -159,7 +174,7 @@ pub fn get_doc(state: State<AppState>, id: String) -> CmdResult<Doc> {
     state.with(|w| {
         w.conn
             .query_row(
-                "SELECT id, project_id, parent_id, kind, title, synopsis, status, body, sort, word_count, label
+                "SELECT id, project_id, parent_id, kind, title, synopsis, status, body, sort, word_count, label, meta
                    FROM docs WHERE id = ?1",
                 [&id],
                 |r| {
@@ -176,6 +191,7 @@ pub fn get_doc(state: State<AppState>, id: String) -> CmdResult<Doc> {
                         sort: r.get(8)?,
                         word_count: r.get(9)?,
                         label: r.get(10)?,
+                        meta: json_or_empty(r.get(11)?),
                     })
                 },
             )
@@ -407,8 +423,88 @@ pub fn delete_snapshot(state: State<AppState>, id: String) -> CmdResult<()> {
     state.with(|w| w.conn.execute("DELETE FROM snapshots WHERE id = ?1", [&id]).map(|_| ()).map_err(err))
 }
 
+/// Changes a document's scene details (and nothing else).
+#[tauri::command]
+pub fn update_doc_meta(state: State<AppState>, id: String, meta: Value) -> CmdResult<()> {
+    state.with(|w| {
+        w.conn
+            .execute("UPDATE docs SET meta = ?2 WHERE id = ?1", params![id, meta.to_string()])
+            .map(|_| ())
+            .map_err(err)
+    })
+}
+
+/// A manuscript document seen as a scene: its details and every entry its text mentions.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct SceneInfo {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub meta: Value,
+    pub mentions: Vec<String>,
+}
+
+pub(crate) fn scenes(conn: &rusqlite::Connection) -> CmdResult<Vec<SceneInfo>> {
+    let mut mentions: std::collections::HashMap<String, Vec<String>> = Default::default();
+    let mut stmt = conn
+        .prepare("SELECT source_id, target_id FROM links WHERE source_kind = 'doc' AND via = 'mention' ORDER BY rowid")
+        .map_err(err)?;
+    for row in stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).map_err(err)? {
+        let (doc, entry) = row.map_err(err)?;
+        mentions.entry(doc).or_default().push(entry);
+    }
+    let mut stmt = conn
+        .prepare("SELECT id, project_id, title, meta FROM docs WHERE kind = 'text' ORDER BY project_id, sort")
+        .map_err(err)?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)))
+        .map_err(err)?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, project_id, title, meta) = row.map_err(err)?;
+        let found = mentions.remove(&id).unwrap_or_default();
+        out.push(SceneInfo { id, project_id, title, meta: json_or_empty(meta), mentions: found });
+    }
+    Ok(out)
+}
+
+/// Every manuscript document in the world as a scene, for the timeline, entries and checks.
+#[tauri::command]
+pub fn scene_index(state: State<AppState>) -> CmdResult<Vec<SceneInfo>> {
+    state.with(|w| scenes(&w.conn))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scene_details_survive_saving_the_text() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_for_tests(&conn);
+        conn.execute_batch(
+            "INSERT INTO projects (id, title) VALUES ('p', 'Book');
+             INSERT INTO entry_types (id, name, plural) VALUES ('t', 'Character', 'Characters');
+             INSERT INTO entries (id, type_id, title) VALUES ('vex', 't', 'Vex');
+             INSERT INTO docs (id, project_id, title) VALUES ('d', 'p', 'Chapter 1');
+             UPDATE docs SET meta = '{\"pov\":\"vex\"}' WHERE id = 'd';
+             INSERT INTO links (source_kind, source_id, target_id, via) VALUES ('doc', 'd', 'vex', 'mention');",
+        )
+        .unwrap();
+        // The editor saves the text with the (stale) details it loaded earlier.
+        conn.execute(
+            "INSERT INTO docs (id, project_id, parent_id, kind, title, synopsis, status, body, word_count, sort, label)
+             VALUES ('d', 'p', NULL, 'text', 'Chapter 1', '', '', NULL, 0, 1, '')
+             ON CONFLICT(id) DO UPDATE SET title = excluded.title, body = excluded.body",
+            [],
+        )
+        .unwrap();
+        let s = super::scenes(&conn).unwrap();
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].meta["pov"], "vex");
+        assert_eq!(s[0].mentions, vec!["vex"]);
+    }
+
     use crate::db;
     use rusqlite::params;
 

@@ -153,6 +153,8 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX entry_versions_by_entry ON entry_versions(entry_id, created_at);
     "#,
+    // v9: scene details for each manuscript document: POV, location, who's present, date, plot threads
+    "ALTER TABLE docs ADD COLUMN meta TEXT NOT NULL DEFAULT '{}';",
 ];
 
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {

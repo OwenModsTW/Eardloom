@@ -24,13 +24,15 @@ export const LABEL_COLORS = ["#e0a458", "#c96d6d", "#5fb0c9", "#6fb58a", "#9b8bd
 export interface PlanSettings {
   statuses?: Status[];
   labels?: Label[];
+  /** Plot threads followed through the book. */
+  threads?: Label[];
   targets?: Record<string, number>;
   bookTarget?: number;
 }
 
 export const planOf = (project: Project) => {
   const s = project.settings as PlanSettings;
-  return { statuses: s.statuses ?? DEFAULT_STATUSES, labels: s.labels ?? [], targets: s.targets ?? {} };
+  return { statuses: s.statuses ?? DEFAULT_STATUSES, labels: s.labels ?? [], threads: s.threads ?? [], targets: s.targets ?? {} };
 };
 
 /** How far along a status is, 0–1, for progress colouring. */

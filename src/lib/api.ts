@@ -6,6 +6,7 @@ import type { JSONContent } from "@tiptap/react";
 import type { WorldMap } from "./maps/model";
 import type {
   EntryVersionData,
+  SceneMeta,
   Backlink,
   Calendar,
   TimelineItem,
@@ -85,6 +86,10 @@ export const api = {
 
   getWorldSetting: (key: WorldSetting) => invoke<string | null>("get_world_setting", { key }),
   setWorldSetting: (key: WorldSetting, value: string | null) => invoke<void>("set_world_setting", { key, value }),
+  /** Changes a document's scene details only (never its text). */
+  updateDocMeta: (id: string, meta: SceneMeta) => invoke<void>("update_doc_meta", { id, meta }),
+  /** Every manuscript document as a scene: its details and who its text mentions. */
+  sceneIndex: () => invoke<(Omit<B.SceneInfo, "meta"> & { meta: SceneMeta })[]>("scene_index"),
   writingOverview: () =>
     invoke<B.WritingOverview>("writing_overview"),
   incomingLinkCounts: () => invoke<Record<string, number>>("incoming_link_counts"),

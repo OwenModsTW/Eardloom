@@ -6,6 +6,7 @@ import { LABEL_COLORS, planOf, statusProgress, type Label, type PlanSettings, ty
 import { readingOrder } from "../lib/export/book";
 import { Select } from "./Select";
 import type { DocSummary, Project } from "../lib/types";
+import { SceneLine } from "./Scenes";
 
 interface Props {
   project: Project;
@@ -136,6 +137,7 @@ export function CardsView({ project, docs, scope, setScope, patchDoc, openDoc, a
                 placeholder="What happens here?"
                 onChange={(e) => save(c.id, { synopsis: e.target.value })}
               />
+              {c.kind === "text" && <SceneLine project={project} doc={c} />}
               <footer>
                 <StatusSelect statuses={statuses} value={c.status} onChange={(status) => save(c.id, { status })} />
                 <LabelSelect labels={labels} value={c.label} onChange={(l) => save(c.id, { label: l })} />
@@ -189,6 +191,7 @@ export function OutlineView({ project, docs, patchDoc, openDoc }: Props) {
           <tr>
             <th>Title</th>
             <th>Synopsis</th>
+            <th>Scene</th>
             <th>Status</th>
             <th>Label</th>
             <th className="num">Words</th>
@@ -226,6 +229,7 @@ export function OutlineView({ project, docs, patchDoc, openDoc }: Props) {
                   <td>
                     <input className="outline-synopsis" value={d.synopsis} placeholder="—" onChange={(e) => save(d.id, { synopsis: e.target.value })} />
                   </td>
+                  <td className="outline-scene">{!isFolder && <SceneLine project={project} doc={d} />}</td>
                   <td>{!isFolder && <StatusSelect statuses={statuses} value={d.status} onChange={(status) => save(d.id, { status })} />}</td>
                   <td>
                     <LabelSelect labels={labels} value={d.label} onChange={(l) => save(d.id, { label: l })} />

@@ -105,6 +105,8 @@ pub fn run() {
             writing::delete_snapshot,
             writing::clipboard_rtf,
             writing::update_doc_details,
+            writing::update_doc_meta,
+            writing::scene_index,
             writing::list_comments,
             writing::save_comment,
             writing::delete_comment,

@@ -42,6 +42,7 @@ export async function createProject(title: string, kind: Project["kind"] = "book
     body: null,
     sort: 1,
     wordCount: 0,
+    meta: {},
   });
   await refreshProjects();
   go({ view: "project", id: project.id, docId: chapter });
