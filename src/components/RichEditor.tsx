@@ -31,7 +31,9 @@ import { RICH_BLOCKS } from "../lib/editor/blocks";
 import { EntryMention, mentionText, nameVariants } from "../lib/editor/mention";
 import { askText } from "./Prompt";
 import { ignoreWord, suggestions } from "../lib/spell";
-import { openMenuAt } from "./ContextMenu";
+import { openMenuAt, type MenuItem } from "./ContextMenu";
+import { ThesaurusPanel, topAlternatives } from "./Thesaurus";
+import { lookup } from "../lib/thesaurus";
 import { rtfToContent } from "../lib/editor/rtf";
 import { Slice } from "@tiptap/pm/model";
 import { api } from "../lib/api";
@@ -319,6 +321,7 @@ export function RichEditor({
   const onStatsRef = useRef(onStats);
   onStatsRef.current = onStats;
   const [find, setFind] = useState<{ term: string; replace: boolean } | null>(null);
+  const [thesaurus, setThesaurus] = useState<{ word: string; from: number; to: number; x: number; y: number } | null>(null);
   // Find in book opens its search in the chapter it leads to.
   useEffect(() => {
     if (!primary) return;
@@ -414,6 +417,98 @@ export function RichEditor({
     },
   });
 
+  /** The word at a position in the text (letters, apostrophes and hyphens), without a possessive 's. */
+  const wordAt = (pos: number) => {
+    if (!editor) return null;
+    const $p = editor.state.doc.resolve(pos);
+    const block = $p.parent;
+    if (!block.isTextblock) return null;
+    // Mentions, footnotes and other inline objects count as one character, like in the document.
+    const text = block.textBetween(0, block.content.size, undefined, "\ufffc");
+    const inWord = (c: string | undefined) => !!c && /[\p{L}\p{N}'’-]/u.test(c);
+    let s = $p.parentOffset;
+    let e = s;
+    while (s > 0 && inWord(text[s - 1])) s--;
+    while (e < text.length && inWord(text[e])) e++;
+    while (s < e && /['’-]/.test(text[s])) s++;
+    while (e > s && /['’-]/.test(text[e - 1])) e--;
+    if (/['’]s$/i.test(text.slice(s, e))) e -= 2;
+    const word = text.slice(s, e);
+    if (!/\p{L}/u.test(word)) return null;
+    return { word, from: $p.start() + s, to: $p.start() + e };
+  };
+
+  /** The selected word, or the word under the pointer. */
+  const wordFor = (x: number, y: number) => {
+    if (!editor) return null;
+    const { from, to } = editor.state.selection;
+    if (from !== to) {
+      const picked = editor.state.doc.textBetween(from, to, " ", "\ufffc");
+      if (/^[\p{L}'’-]+$/u.test(picked)) return { word: picked, from, to };
+    }
+    const hit = editor.view.posAtCoords({ left: x, top: y });
+    return hit ? wordAt(hit.pos) : null;
+  };
+
+  /** Puts a word in place of another, keeping its formatting (italics and so on). */
+  const replaceWord = (range: { from: number; to: number }, text: string) => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr.insertText(text, range.from, range.to));
+    editor.commands.focus();
+  };
+
+  const clipboardItems = (): MenuItem[] => {
+    if (!editor) return [];
+    const selected = !editor.state.selection.empty;
+    return [
+      { label: "Cut", shortcut: "Ctrl+X", disabled: !selected || !editor.isEditable, onClick: () => (editor.commands.focus(), document.execCommand("cut")) },
+      { label: "Copy", shortcut: "Ctrl+C", disabled: !selected, onClick: () => (editor.commands.focus(), document.execCommand("copy")) },
+      {
+        label: "Paste",
+        shortcut: "Ctrl+V",
+        disabled: !editor.isEditable,
+        onClick: async () => {
+          editor.commands.focus();
+          try {
+            const [item] = await navigator.clipboard.read();
+            if (item?.types.includes("text/html")) return editor.view.pasteHTML(await (await item.getType("text/html")).text());
+          } catch {
+            /* fall back to plain text */
+          }
+          editor.view.pasteText(await navigator.clipboard.readText());
+        },
+      },
+    ];
+  };
+
+  // Right-click: spelling suggestions on a misspelt word; otherwise alternatives from the thesaurus.
+  const contextMenu = async (e: React.MouseEvent) => {
+    if (!editor || (e.target as HTMLElement).closest(".spell-error")) return spellMenu(e);
+    e.preventDefault();
+    const { clientX: x, clientY: y } = e;
+    const range = wordFor(x, y);
+    const items: MenuItem[] = [];
+    if (range) {
+      const alternatives = topAlternatives(range.word, await lookup(range.word).catch(() => []));
+      items.push(
+        ...(alternatives.length
+          ? alternatives.map((a) => ({
+              label: (
+                <span className="menu-alt">
+                  <strong>{a.text}</strong>
+                  <small>{a.gloss}</small>
+                </span>
+              ),
+              onClick: () => replaceWord(range, a.text),
+            }))
+          : [{ label: `No alternatives for “${range.word}”`, disabled: true, onClick: () => {} }]),
+        { label: "Thesaurus…", shortcut: "Shift+F7", onClick: () => setThesaurus({ ...range, x, y }) },
+        "separator",
+      );
+    }
+    openMenuAt(x, y, [...items, ...clipboardItems()]);
+  };
+
   const spellMenu = async (e: React.MouseEvent) => {
     const el = (e.target as HTMLElement).closest(".spell-error") as HTMLElement | null;
     if (!el || !editor) return;
@@ -432,6 +527,8 @@ export function RichEditor({
       "separator",
       { label: `Learn “${word}”`, onClick: () => useStore.getState().learnWord(word) },
       { label: "Ignore for now", onClick: () => ignoreWord(word) },
+      "separator",
+      ...clipboardItems(),
     ]);
   };
 
@@ -439,7 +536,7 @@ export function RichEditor({
     <EditorContent
       editor={editor}
       className={`rich ${compact ? "compact" : ""} ${className ?? ""}`}
-      onContextMenu={spellMenu}
+      onContextMenu={contextMenu}
       onClick={(e) => {
         const c = (e.target as HTMLElement).closest("[data-comment]") as HTMLElement | null;
         if (c && primary) useActiveEditor.setState({ focusedComment: c.dataset.comment ?? null });
@@ -450,6 +547,14 @@ export function RichEditor({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const mod = e.ctrlKey || e.metaKey;
+    if (e.shiftKey && e.key === "F7") {
+      e.preventDefault();
+      const { from } = editor.state.selection;
+      const range = editor.state.selection.empty ? wordAt(from) : wordFor(-1, -1);
+      const at = editor.view.coordsAtPos(from);
+      if (range) setThesaurus({ ...range, x: at.left, y: at.bottom });
+      return;
+    }
     if (mod && (e.key === "f" || e.key === "h")) {
       e.preventDefault();
       const { from, to } = editor.state.selection;
@@ -463,6 +568,14 @@ export function RichEditor({
       {toolbar && <FormatBar editor={editor} manuscript={manuscript} onFind={() => setFind({ term: "", replace: false })} />}
       {find && <FindBar key={find.term} editor={editor} initial={find.term} withReplace={find.replace} onClose={() => setFind(null)} />}
       {body}
+      {thesaurus && (
+        <ThesaurusPanel
+          word={thesaurus.word}
+          at={thesaurus}
+          onUse={(text) => (replaceWord(thesaurus, text), setThesaurus(null))}
+          onClose={() => setThesaurus(null)}
+        />
+      )}
     </div>
   );
 }

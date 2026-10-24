@@ -116,6 +116,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.`;
 const apache = Object.entries(texts).find(([, t]) => /Apache License\s+Version 2\.0, January 2004/.test(t) && t.length > 9000)?.[0];
+// Data built into the app (not code): the thesaurus comes from WordNet.
+const wordnetLicence = join(root, "node_modules", "wordnet-db", "LICENSE");
+if (!existsSync(wordnetLicence)) problems.push("WordNet licence not found (install dev dependencies)");
+else
+  packages.push({
+    name: "WordNet (thesaurus)",
+    version: "3.1",
+    kind: "data",
+    licence: "WordNet License",
+    source: "https://wordnet.princeton.edu",
+    texts: [store(readFileSync(wordnetLicence, "utf8"))],
+  });
+
 const downloaded = [
   { name: "llama.cpp (assistant engine)", version: "b11722", kind: "download", licence: "MIT", source: "https://github.com/ggml-org/llama.cpp", texts: [store(MIT_GGML)] },
   ...["4B", "8B", "14B"].map((size) => ({

@@ -30,3 +30,6 @@ src-tauri/gen/schemas
 
 # Signing keys must never be committed
 *.key
+
+# Built from WordNet during the build
+public/thesaurus.json

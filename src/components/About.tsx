@@ -5,7 +5,7 @@ import { Search, X } from "lucide-react";
 interface Pkg {
   name: string;
   version: string;
-  kind: "npm" | "crate" | "download";
+  kind: "npm" | "crate" | "download" | "data";
   licence: string;
   source: string;
   texts: string[];
@@ -65,7 +65,7 @@ function LicencesDialog({ onClose }: { onClose: () => void }) {
                     <strong>{p.name}</strong>
                     <small>
                       {p.version} · {p.licence}
-                      {p.kind === "download" ? " · downloaded on request" : ""}
+                      {p.kind === "download" ? " · downloaded on request" : p.kind === "data" ? " · built-in data" : ""}
                     </small>
                   </button>
                   {open === id && data && (
