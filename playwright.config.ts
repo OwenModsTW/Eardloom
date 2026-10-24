@@ -11,10 +11,12 @@ export default defineConfig({
     baseURL: "http://localhost:5199",
     viewport: { width: 1440, height: 900 },
   },
+  // A real build of the app (with the stand-in backend), not the development server: the dev
+  // server reloads the page when it first meets a library, which breaks a test mid-run.
   webServer: {
-    command: "npm run dev -- --mode smoke --port 5199 --strictPort",
+    command: "node scripts/gen-thesaurus.mjs --if-missing && npx vite build --mode smoke --outDir dist-smoke && npx vite preview --mode smoke --outDir dist-smoke --port 5199 --strictPort",
     url: "http://localhost:5199",
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
   },
 });

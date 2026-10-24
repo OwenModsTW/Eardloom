@@ -11,6 +11,8 @@ const errors: string[] = [];
 async function visit(page: Page, name: string, route?: Route) {
   if (route) await page.evaluate((r) => window.__smoke.store.getState().go(r as never), route);
   await page.waitForTimeout(700);
+  // The app is still there (a blank window has no errors to report, but is still broken).
+  await expect(page.locator(".app"), `${name}: the window went blank`).toBeVisible();
   await expect(page.locator(".page-error"), `${name}: the page failed to draw`).toHaveCount(0);
   await page.screenshot({ path: `test-results/smoke/${name}.png` });
   expect(errors, `${name}: errors while showing the page`).toEqual([]);

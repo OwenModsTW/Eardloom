@@ -37,3 +37,4 @@ public/thesaurus.json
 # Page test output
 test-results
 playwright-report
+dist-smoke
